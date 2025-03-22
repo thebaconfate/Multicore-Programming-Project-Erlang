@@ -8,12 +8,7 @@
 %% experiments. The semantics of the API here should remain unchanged.
 -module(server).
 
--export([connect/1,
-         disconnect/1,
-         create/2,
-         store/4,
-         retrieve/3,
-         delete/3]).
+-export([connect/1, disconnect/1, create/2, store/4, retrieve/3, delete/3]).
 
 %%
 %% Server API
@@ -64,7 +59,8 @@ store(ServerPid, BucketName, Key, Value) ->
     end.
 
 % Retrieve a value for a key in a bucket.
--spec retrieve(pid(), string(), string()) -> {pid(), retrieved, string(), string()} | {pid(), not_found, string(), string()}.
+-spec retrieve(pid(), string(), string()) ->
+                  {pid(), retrieved, string(), string()} | {pid(), not_found, string(), string()}.
 retrieve(ServerPid, BucketName, Key) ->
     ServerPid ! {self(), retrieve, BucketName, Key},
     receive

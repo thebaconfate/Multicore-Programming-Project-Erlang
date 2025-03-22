@@ -3,9 +3,12 @@
 -export([test_fib/0, test_readwrite/0, test_readonly/0, test_mixedload/0]).
 
 % Fibonacci
-fib(0) -> 1;
-fib(1) -> 1;
-fib(N) -> fib(N - 1) + fib(N - 2).
+fib(0) ->
+    1;
+fib(1) ->
+    1;
+fib(N) ->
+    fib(N - 1) + fib(N - 2).
 
 %% Benchmark helpers
 
@@ -17,21 +20,20 @@ fib(N) -> fib(N - 1) + fib(N - 2).
 % results.
 run_benchmark(Name, Fun, Times) ->
     ThisPid = self(),
-    lists:foreach(fun (I) ->
-        % Recommendation: to make the test fair, each run executes in its own,
-        % newly created Erlang process. Otherwise, if all tests run in the same
-        % process, the later tests start out with larger heap sizes and
-        % therefore probably do fewer garbage collections. Also consider
-        % restarting the Erlang emulator between each test.
-        % Source: http://erlang.org/doc/efficiency_guide/profiling.html
-        spawn_link(fun () ->
-            measure(Name, Fun, I),
-            ThisPid ! done
-        end),
-        receive done ->
-            ok
-        end
-    end, lists:seq(1, Times)).
+    lists:foreach(fun(I) ->
+                     % Recommendation: to make the test fair, each run executes in its own,
+                     % newly created Erlang process. Otherwise, if all tests run in the same
+                     % process, the later tests start out with larger heap sizes and
+                     % therefore probably do fewer garbage collections. Also consider
+                     % restarting the Erlang emulator between each test.
+                     % Source: http://erlang.org/doc/efficiency_guide/profiling.html
+                     spawn_link(fun() ->
+                                   measure(Name, Fun, I),
+                                   ThisPid ! done
+                                end),
+                     receive done -> ok end
+                  end,
+                  lists:seq(1, Times)).
 
 % Run the function `Fun` and print the time it took.
 %
@@ -53,7 +55,6 @@ measure(Name, Fun, I) ->
     %   misleading.
     StartTime = os:timestamp(), % Wall clock time
     %statistics(runtime),       % CPU time, summed for all threads
-
     % Run
     Fun(),
 
@@ -62,7 +63,9 @@ measure(Name, Fun, I) ->
     % The granularity of both measurement types can be high. Therefore, ensure
     % that each individual measurement lasts for at least several seconds.
     % [1] http://erlang.org/doc/efficiency_guide/profiling.html
-    WallClockTime = timer:now_diff(os:timestamp(), StartTime),
+    WallClockTime =
+        timer:now_diff(
+            os:timestamp(), StartTime),
     %{_, CpuTime} = statistics(runtime),
     io:format("Wall clock time = ~p ms~n", [WallClockTime / 1000.0]),
     %io:format("CPU time = ~p ms~n", [CpuTime]),
@@ -81,14 +84,14 @@ test_fib() ->
 test_fib_benchmark() ->
     % Spawn 64 processes that each compute the 30th Fibonacci number.
     BenchmarkPid = self(),
-    Pids = [spawn(fun () ->
-        fib(30),
-        BenchmarkPid ! done
-    end) || _ <- lists:seq(1, 64)],
+    Pids =
+        [spawn(fun() ->
+                  fib(30),
+                  BenchmarkPid ! done
+               end)
+         || _ <- lists:seq(1, 64)],
     % Then we wait for all the processes to finish.
-    lists:foreach(fun (_) ->
-        receive done -> ok end
-    end, Pids).
+    lists:foreach(fun(_) -> receive done -> ok end end, Pids).
 
 % Creates a server with 1000 buckets each containing 100 keys and values.
 %
@@ -117,17 +120,21 @@ initialize_server() ->
     % differing sizes.
     Keys = lists:seq(1, NumberOfKeysPerBucket),
     % Generate buckets dict.
-    Buckets = dict:from_list(lists:map(fun (BucketName) ->
-        {BucketName, dict:from_list(lists:map(fun (Key) ->
-            {Key, generate_value(Key)}
-        end, Keys))}
-    end, BucketNames)),
+    Buckets =
+        dict:from_list(
+            lists:map(fun(BucketName) ->
+                         {BucketName,
+                          dict:from_list(
+                              lists:map(fun(Key) -> {Key, generate_value(Key)} end, Keys))}
+                      end,
+                      BucketNames)),
     ServerPid = server_centralized:initialize_with(Buckets),
     {ServerPid, BucketNames, Keys}.
 
 % Pick a random element from a list.
 pick_random(List) ->
-    lists:nth(rand:uniform(length(List)), List).
+    lists:nth(
+        rand:uniform(length(List)), List).
 
 % Pick a random bucket name and key from the list of bucket names and keys.
 pick_random_bucket_and_key(BucketNames, Keys) ->
@@ -148,24 +155,35 @@ test_readwrite() ->
     NumberOfClients = 100,
     NumberOfOperations = 1000,
     run_benchmark("readwrite",
-        fun () ->
-            BenchmarkPid = self(),
-            % We spawn all the processes in parallel.
-            Pids = [spawn(fun () ->
-                lists:foreach(fun (_) ->
-                    {BucketName, Key} = pick_random_bucket_and_key(BucketNames, Keys),
-                    server:store(ServerPid, BucketName, Key, generate_value(Key))
-                end, lists:seq(1, NumberOfOperations)),
-                lists:foreach(fun (_) ->
-                    {BucketName, Key} = pick_random_bucket_and_key(BucketNames, Keys),
-                    server:retrieve(ServerPid, BucketName, Key)
-                end, lists:seq(1, NumberOfOperations)),
-                BenchmarkPid ! done
-            end) || _ <- lists:seq(1, NumberOfClients)],
-            % Then we wait for all the processes to finish.
-            lists:foreach(fun (_) -> receive done -> ok end end, Pids)
-        end,
-        30).
+                  fun() ->
+                     BenchmarkPid = self(),
+                     % We spawn all the processes in parallel.
+                     Pids =
+                         [spawn(fun() ->
+                                   lists:foreach(fun(_) ->
+                                                    {BucketName, Key} =
+                                                        pick_random_bucket_and_key(BucketNames,
+                                                                                   Keys),
+                                                    server:store(ServerPid,
+                                                                 BucketName,
+                                                                 Key,
+                                                                 generate_value(Key))
+                                                 end,
+                                                 lists:seq(1, NumberOfOperations)),
+                                   lists:foreach(fun(_) ->
+                                                    {BucketName, Key} =
+                                                        pick_random_bucket_and_key(BucketNames,
+                                                                                   Keys),
+                                                    server:retrieve(ServerPid, BucketName, Key)
+                                                 end,
+                                                 lists:seq(1, NumberOfOperations)),
+                                   BenchmarkPid ! done
+                                end)
+                          || _ <- lists:seq(1, NumberOfClients)],
+                     % Then we wait for all the processes to finish.
+                     lists:foreach(fun(_) -> receive done -> ok end end, Pids)
+                  end,
+                  30).
 
 % Test read-only operations.
 %
@@ -175,20 +193,25 @@ test_readonly() ->
     NumberOfClients = 100,
     NumberOfOperations = 1000,
     run_benchmark("readonly",
-        fun () ->
-            BenchmarkPid = self(),
-            % We spawn all the processes in parallel.
-            Pids = [spawn(fun () ->
-                lists:foreach(fun (_) ->
-                    {BucketName, Key} = pick_random_bucket_and_key(BucketNames, Keys),
-                    server:retrieve(ServerPid, BucketName, Key)
-                end, lists:seq(1, NumberOfOperations)),
-                BenchmarkPid ! done
-            end) || _ <- lists:seq(1, NumberOfClients)],
-            % Then we wait for all the processes to finish.
-            lists:foreach(fun (_) -> receive done -> ok end end, Pids)
-        end,
-        30).
+                  fun() ->
+                     BenchmarkPid = self(),
+                     % We spawn all the processes in parallel.
+                     Pids =
+                         [spawn(fun() ->
+                                   lists:foreach(fun(_) ->
+                                                    {BucketName, Key} =
+                                                        pick_random_bucket_and_key(BucketNames,
+                                                                                   Keys),
+                                                    server:retrieve(ServerPid, BucketName, Key)
+                                                 end,
+                                                 lists:seq(1, NumberOfOperations)),
+                                   BenchmarkPid ! done
+                                end)
+                          || _ <- lists:seq(1, NumberOfClients)],
+                     % Then we wait for all the processes to finish.
+                     lists:foreach(fun(_) -> receive done -> ok end end, Pids)
+                  end,
+                  30).
 
 % Test a load of 99% retrieve and 1% store operations.
 %
@@ -200,21 +223,32 @@ test_mixedload() ->
     NumberOfWriteOperations = 10,
     NumberOfReadOperations = 990,
     run_benchmark("mixedload",
-        fun () ->
-            BenchmarkPid = self(),
-            % We spawn all the processes in parallel.
-            Pids = [spawn(fun () ->
-                lists:foreach(fun (_) ->
-                    {BucketName, Key} = pick_random_bucket_and_key(BucketNames, Keys),
-                    server:store(ServerPid, BucketName, Key, generate_value(Key))
-                end, lists:seq(1, NumberOfWriteOperations)),
-                lists:foreach(fun (_) ->
-                    {BucketName, Key} = pick_random_bucket_and_key(BucketNames, Keys),
-                    server:retrieve(ServerPid, BucketName, Key)
-                end, lists:seq(1, NumberOfReadOperations)),
-                BenchmarkPid ! done
-            end) || _ <- lists:seq(1, NumberOfClients)],
-            % Then we wait for all the processes to finish.
-            lists:foreach(fun (_) -> receive done -> ok end end, Pids)
-        end,
-        30).
+                  fun() ->
+                     BenchmarkPid = self(),
+                     % We spawn all the processes in parallel.
+                     Pids =
+                         [spawn(fun() ->
+                                   lists:foreach(fun(_) ->
+                                                    {BucketName, Key} =
+                                                        pick_random_bucket_and_key(BucketNames,
+                                                                                   Keys),
+                                                    server:store(ServerPid,
+                                                                 BucketName,
+                                                                 Key,
+                                                                 generate_value(Key))
+                                                 end,
+                                                 lists:seq(1, NumberOfWriteOperations)),
+                                   lists:foreach(fun(_) ->
+                                                    {BucketName, Key} =
+                                                        pick_random_bucket_and_key(BucketNames,
+                                                                                   Keys),
+                                                    server:retrieve(ServerPid, BucketName, Key)
+                                                 end,
+                                                 lists:seq(1, NumberOfReadOperations)),
+                                   BenchmarkPid ! done
+                                end)
+                          || _ <- lists:seq(1, NumberOfClients)],
+                     % Then we wait for all the processes to finish.
+                     lists:foreach(fun(_) -> receive done -> ok end end, Pids)
+                  end,
+                  30).

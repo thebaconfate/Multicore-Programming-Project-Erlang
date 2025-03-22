@@ -11,7 +11,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([initialize/0, initialize_with/1, server_actor/1, typical_session_1/1,
-    typical_session_2/1]).
+         typical_session_2/1]).
 
 %%
 %% Additional API Functions
@@ -39,12 +39,10 @@ server_actor(Buckets) ->
             % This doesn't do anything, but you could use this operation if needed.
             Sender ! {self(), connected},
             server_actor(Buckets);
-
         {Sender, disconnect} ->
             % This doesn't do anything, but you could use this operation if needed.
             Sender ! {self(), disconnected},
             server_actor(Buckets);
-
         {Sender, create, BucketName} ->
             % If a bucket already exists, it is overwritten with an empty bucket.
             % This is probably not what you want, but we disregard this error for
@@ -52,7 +50,6 @@ server_actor(Buckets) ->
             NewBuckets = dict:store(BucketName, dict:new(), Buckets),
             Sender ! {self(), created, BucketName},
             server_actor(NewBuckets);
-
         {Sender, store, BucketName, Key, Value} ->
             % Existing keys are overwritten. This is the desired behavior.
             OldBucket = get_bucket(BucketName, Buckets),
@@ -60,15 +57,15 @@ server_actor(Buckets) ->
             NewBuckets = dict:store(BucketName, NewBucket, Buckets),
             Sender ! {self(), stored, BucketName, Key},
             server_actor(NewBuckets);
-
         {Sender, retrieve, BucketName, Key} ->
             Bucket = get_bucket(BucketName, Buckets),
             case dict:find(Key, Bucket) of
-                {ok, Value} -> Sender ! {self(), retrieved, BucketName, Key, Value};
-                error -> Sender ! {self(), not_found, BucketName, Key}
+                {ok, Value} ->
+                    Sender ! {self(), retrieved, BucketName, Key, Value};
+                error ->
+                    Sender ! {self(), not_found, BucketName, Key}
             end,
             server_actor(Buckets);
-
         {Sender, delete, BucketName, Key} ->
             OldBucket = get_bucket(BucketName, Buckets),
             NewBucket = dict:erase(Key, OldBucket),
@@ -84,8 +81,10 @@ server_actor(Buckets) ->
 % Find a bucket in the dictionary. If it doesn't exist, returns an empty dictionary.
 get_bucket(BucketName, Buckets) ->
     case dict:find(BucketName, Buckets) of
-        {ok, Bucket} -> Bucket;
-        error -> dict:new()
+        {ok, Bucket} ->
+            Bucket;
+        error ->
+            dict:new()
     end.
 
 %%
@@ -120,23 +119,30 @@ create_test() ->
 % Test store function.
 store_test() ->
     ServerPid = create_test(),
-    ?assertMatch({_, stored, "shopping", "milk"}, server:store(ServerPid, "shopping", "milk", 1)),
-    ?assertMatch({_, stored, "shopping", "eggs"}, server:store(ServerPid, "shopping", "eggs", 3)),
+    ?assertMatch({_, stored, "shopping", "milk"},
+                 server:store(ServerPid, "shopping", "milk", 1)),
+    ?assertMatch({_, stored, "shopping", "eggs"},
+                 server:store(ServerPid, "shopping", "eggs", 3)),
     ServerPid.
 
 % Test retrieve function.
 retrieve_test() ->
     ServerPid = store_test(),
-    ?assertMatch({_, retrieved, "shopping", "milk", 1}, server:retrieve(ServerPid, "shopping", "milk")),
-    ?assertMatch({_, retrieved, "shopping", "eggs", 3}, server:retrieve(ServerPid, "shopping", "eggs")),
-    ?assertMatch({_, not_found, "shopping", "bread"}, server:retrieve(ServerPid, "shopping", "bread")),
+    ?assertMatch({_, retrieved, "shopping", "milk", 1},
+                 server:retrieve(ServerPid, "shopping", "milk")),
+    ?assertMatch({_, retrieved, "shopping", "eggs", 3},
+                 server:retrieve(ServerPid, "shopping", "eggs")),
+    ?assertMatch({_, not_found, "shopping", "bread"},
+                 server:retrieve(ServerPid, "shopping", "bread")),
     ServerPid.
 
 % Test delete function.
 delete_test() ->
     ServerPid = retrieve_test(),
-    ?assertMatch({_, deleted, "shopping", "eggs"}, server:delete(ServerPid, "shopping", "eggs")),
-    ?assertMatch({_, not_found, "shopping", "eggs"}, server:retrieve(ServerPid, "shopping", "eggs")),
+    ?assertMatch({_, deleted, "shopping", "eggs"},
+                 server:delete(ServerPid, "shopping", "eggs")),
+    ?assertMatch({_, not_found, "shopping", "eggs"},
+                 server:retrieve(ServerPid, "shopping", "eggs")),
     ServerPid.
 
 % A "typical" session.
@@ -157,9 +163,11 @@ typical_session_1(TesterPid) ->
     {ServerPid, created, "shopping"} = server:create(ServerPid, "shopping"),
     {ServerPid, stored, "shopping", "milk"} = server:store(ServerPid, "shopping", "milk", 1),
     {ServerPid, stored, "shopping", "eggs"} = server:store(ServerPid, "shopping", "eggs", 3),
-    {ServerPid, retrieved, "shopping", "milk", 1} = server:retrieve(ServerPid, "shopping", "milk"),
+    {ServerPid, retrieved, "shopping", "milk", 1} =
+        server:retrieve(ServerPid, "shopping", "milk"),
     {ServerPid, deleted, "shopping", "eggs"} = server:delete(ServerPid, "shopping", "eggs"),
-    {ServerPid, not_found, "shopping", "eggs"} = server:retrieve(ServerPid, "shopping", "eggs"),
+    {ServerPid, not_found, "shopping", "eggs"} =
+        server:retrieve(ServerPid, "shopping", "eggs"),
     {ServerPid, disconnected} = server:disconnect(ServerPid),
     TesterPid ! {self(), ok}.
 
