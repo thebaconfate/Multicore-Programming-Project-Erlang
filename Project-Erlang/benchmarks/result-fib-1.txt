@@ -1,0 +1,9 @@
+Parameters:
+
+Starting benchmark fib: 1
+Wall clock time = 658.0 ms
+fib done
+Starting benchmark fib: 2
+
+BREAK: (a)bort (A)bort with dump (c)ontinue (p)roc info (i)nfo
+       (l)oaded (v)ersion (k)ill (D)b-tables (d)istribution
