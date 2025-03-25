@@ -8,15 +8,26 @@ set -euo pipefail
 for i in {1..64}
 do
     echo "---"
-    echo "> fib, $i threads"
-    erl +S $i -noshell -s benchmark test_fib -s init stop > "benchmarks/result-fib-$i.txt"
+    echo "> readwrite, central, $i threads"
+    erl +S $i -noshell -s benchmark test_centralized_readwrite -s init stop > "benchmarks/central-rw$i.txt"
+
     echo "---"
-    echo "> readwrite, $i threads"
-    erl +S $i -noshell -s benchmark test_readwrite -s init stop > "benchmarks/result-readwrite-$i.txt"
+    echo "> readwrite multi-server, sharded, cached, $i threads"
+    erl +S $i -noshell -s benchmark test_multi_decentral_cached_readwrite -s init stop > "benchmarks/multi-shard-cache-rw$i.txt"
+
     echo "---"
-    echo "> readonly, $i threads"
-    erl +S $i -noshell -s benchmark test_readonly -s init stop > "benchmarks/result-readonly-$i.txt"
+    echo "> readonly, central, $i threads"
+    erl +S $i -noshell -s benchmark test_centralized_readonly -s init stop > "benchmarks/central-r$i.txt"
+
     echo "---"
-    echo "> mixed load, $i threads"
-    erl +S $i -noshell -s benchmark test_mixedload -s init stop > "benchmarks/result-mixedload-$i.txt"
+    echo "> readonly, multi-server, sharded, cached, $i threads"
+    erl +S $i -noshell -s benchmark test_multi_decentral_cached_readonly -s init stop > "benchmarks/multi-shard-cache-r$i.txt"
+
+    echo "---"
+    echo "> mixed load, central, $i threads"
+    erl +S $i -noshell -s benchmark test_centralized_mixedload -s init stop > "benchmarks/central-mix$i.txt"
+
+    echo "---"
+    echo "> mixed load, multi-server, sharded, cached, $i threads"
+    erl +S $i -noshell -s benchmark test_multi_decentral_cached_mixedload -s init stop > "benchmarks/multi-shard-cache-mix$i.txt"
 done

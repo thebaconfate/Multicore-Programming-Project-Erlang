@@ -10,19 +10,27 @@ if (-Not (Test-Path $DirName)) {
 
 for ($i = 1; $i -le 64; $i++) {
     Write-Output "---"
-    Write-Output "> fib, $i threads"
-    erl +S $i -noshell -s benchmark test_fib -s init stop | Out-File -Encoding utf8 "benchmarks/result-fib-$i.txt"
+    Write-Output "> readwrite centralized, $i threads"
+    erl +S $i -noshell -s benchmark test_centralized_readwrite -s init stop | Out-File -Encoding utf8 "benchmarks/central-rw$i.txt"
 
     Write-Output "---"
-    Write-Output "> readwrite, $i threads"
-    erl +S $i -noshell -s benchmark test_readwrite -s init stop | Out-File -Encoding utf8 "benchmarks/result-readwrite-$i.txt"
+    Write-Output "> readwrite multi-server, sharded, cached, $i threads"
+    erl +S $i -noshell -s benchmark test_multi_decentral_cached_readwrite -s init stop | Out-File -Encoding utf8 "benchmarks/multi-shard-cache-rw$i.txt"
 
     Write-Output "---"
-    Write-Output "> readonly, $i threads"
-    erl +S $i -noshell -s benchmark test_readonly -s init stop | Out-File -Encoding utf8 "benchmarks/result-readonly-$i.txt"
+    Write-Output "> readonly centralized, $i threads"
+    erl +S $i -noshell -s benchmark test_centralized_readonly -s init stop | Out-File -Encoding utf8 "benchmarks/central-r$i.txt"
 
     Write-Output "---"
-    Write-Output "> mixed load, $i threads"
-    erl +S $i -noshell -s benchmark test_mixedload -s init stop | Out-File -Encoding utf8 "benchmarks/result-mixedload-$i.txt"
+    Write-Output "> readonly multi-server, sharded, cached, $i threads"
+    erl +S $i -noshell -s benchmark test_multi_decentral_cached_readonly -s init stop | Out-File -Encoding utf8 "benchmarks/multi-shard-cache-r$i.txt"
+
+    Write-Output "---"
+    Write-Output "> mixed load centralized, $i threads"
+    erl +S $i -noshell -s benchmark test_centralized_mixedload -s init stop | Out-File -Encoding utf8 "benchmarks/central-mix$i.txt"
+
+    Write-Output "---"
+    Write-Output "> mixed load, multi-server, sharded, cached, $i threads"
+    erl +S $i -noshell -s benchmark test_multi_decentral_cached_mixedload -s init stop | Out-File -Encoding utf8 "benchmarks/multi-shard-cache-mix$i.txt"
 }
 

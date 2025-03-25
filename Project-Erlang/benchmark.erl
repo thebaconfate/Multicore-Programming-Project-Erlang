@@ -1,14 +1,8 @@
 -module(benchmark).
 
--export([test_fib/0, test_readwrite/0, test_readonly/0, test_mixedload/0]).
-
-% Fibonacci
-fib(0) ->
-    1;
-fib(1) ->
-    1;
-fib(N) ->
-    fib(N - 1) + fib(N - 2).
+-export([test_centralized_readwrite/0, test_multi_decentral_cached_readwrite/0,
+         test_centralized_readonly/0, test_multi_decentral_cached_readonly/0,
+         test_centralized_mixedload/0, test_multi_decentral_cached_mixedload/0]).
 
 %% Benchmark helpers
 
@@ -76,23 +70,6 @@ measure(Name, Fun, I) ->
 % case of your implementation, some typical scenarios you imagine, or some
 % extreme scenarios.
 
-test_fib() ->
-    io:format("Parameters:~n"),
-    io:format("~n"),
-    run_benchmark("fib", fun test_fib_benchmark/0, 30).
-
-test_fib_benchmark() ->
-    % Spawn 64 processes that each compute the 30th Fibonacci number.
-    BenchmarkPid = self(),
-    Pids =
-        [spawn(fun() ->
-                  fib(30),
-                  BenchmarkPid ! done
-               end)
-         || _ <- lists:seq(1, 64)],
-    % Then we wait for all the processes to finish.
-    lists:foreach(fun(_) -> receive done -> ok end end, Pids).
-
 % Creates a server with 1000 buckets each containing 100 keys and values.
 %
 % This is used to initialize a server that already contains a lot of data, to then
@@ -100,7 +77,7 @@ test_fib_benchmark() ->
 %
 % Note that this code depends on the implementation of the server. You will need to
 % change it if you change the representation of the data in the server.
-initialize_server() ->
+initialize_server(CreateServer) ->
     % Seed random number generator to get reproducible results.
     rand:seed_s(exsplus, {0, 0, 0}),
     % Parameters
@@ -128,7 +105,7 @@ initialize_server() ->
                               lists:map(fun(Key) -> {Key, generate_value(Key)} end, Keys))}
                       end,
                       BucketNames)),
-    ServerPid = server_centralized:initialize_with(Buckets),
+    ServerPid = CreateServer(Buckets),
     {ServerPid, BucketNames, Keys}.
 
 % Pick a random element from a list.
@@ -150,8 +127,9 @@ generate_value(Key) ->
 % operations.
 %
 % Hence, test will do 50% store and 50% retrieve operations.
-test_readwrite() ->
-    {ServerPid, BucketNames, Keys} = initialize_server(),
+test_readwrite(CreateServer) ->
+    {ServerPid, BucketNames, Keys} = initialize_server(CreateServer),
+    io:format("ServerPid: ~p~n", [ServerPid]),
     NumberOfClients = 100,
     NumberOfOperations = 1000,
     run_benchmark("readwrite",
@@ -160,11 +138,12 @@ test_readwrite() ->
                      % We spawn all the processes in parallel.
                      Pids =
                          [spawn(fun() ->
+                                   {ClientPid, connected} = server:connect(ServerPid),
                                    lists:foreach(fun(_) ->
                                                     {BucketName, Key} =
                                                         pick_random_bucket_and_key(BucketNames,
                                                                                    Keys),
-                                                    server:store(ServerPid,
+                                                    server:store(ClientPid,
                                                                  BucketName,
                                                                  Key,
                                                                  generate_value(Key))
@@ -174,9 +153,10 @@ test_readwrite() ->
                                                     {BucketName, Key} =
                                                         pick_random_bucket_and_key(BucketNames,
                                                                                    Keys),
-                                                    server:retrieve(ServerPid, BucketName, Key)
+                                                    server:retrieve(ClientPid, BucketName, Key)
                                                  end,
                                                  lists:seq(1, NumberOfOperations)),
+                                   server:disconnect(ClientPid),
                                    BenchmarkPid ! done
                                 end)
                           || _ <- lists:seq(1, NumberOfClients)],
@@ -185,11 +165,17 @@ test_readwrite() ->
                   end,
                   30).
 
+test_centralized_readwrite() ->
+    test_readwrite(central()).
+
+test_multi_decentral_cached_readwrite() ->
+    test_readwrite(multi_decentral_cached()).
+
 % Test read-only operations.
 %
 % We will spawn 100 processes, each of which will do 1000 retrieve operations.
-test_readonly() ->
-    {ServerPid, BucketNames, Keys} = initialize_server(),
+test_readonly(CreateServer) ->
+    {ServerPid, BucketNames, Keys} = initialize_server(CreateServer),
     NumberOfClients = 100,
     NumberOfOperations = 1000,
     run_benchmark("readonly",
@@ -198,11 +184,14 @@ test_readonly() ->
                      % We spawn all the processes in parallel.
                      Pids =
                          [spawn(fun() ->
+                                   {ClientServerPid, connected} = server:connect(ServerPid),
                                    lists:foreach(fun(_) ->
                                                     {BucketName, Key} =
                                                         pick_random_bucket_and_key(BucketNames,
                                                                                    Keys),
-                                                    server:retrieve(ServerPid, BucketName, Key)
+                                                    server:retrieve(ClientServerPid,
+                                                                    BucketName,
+                                                                    Key)
                                                  end,
                                                  lists:seq(1, NumberOfOperations)),
                                    BenchmarkPid ! done
@@ -213,12 +202,18 @@ test_readonly() ->
                   end,
                   30).
 
+test_centralized_readonly() ->
+    test_readonly(central()).
+
+test_multi_decentral_cached_readonly() ->
+    test_readonly(multi_decentral_cached()).
+
 % Test a load of 99% retrieve and 1% store operations.
 %
 % We will spawn 100 processes, each of which will do 990 retrieve and 10 store
 % operations.
-test_mixedload() ->
-    {ServerPid, BucketNames, Keys} = initialize_server(),
+test_mixedload(CreateServer) ->
+    {ServerPid, BucketNames, Keys} = initialize_server(CreateServer),
     NumberOfClients = 100,
     NumberOfWriteOperations = 10,
     NumberOfReadOperations = 990,
@@ -228,11 +223,12 @@ test_mixedload() ->
                      % We spawn all the processes in parallel.
                      Pids =
                          [spawn(fun() ->
+                                   {ClientServerPid, connected} = server:connect(ServerPid),
                                    lists:foreach(fun(_) ->
                                                     {BucketName, Key} =
                                                         pick_random_bucket_and_key(BucketNames,
                                                                                    Keys),
-                                                    server:store(ServerPid,
+                                                    server:store(ClientServerPid,
                                                                  BucketName,
                                                                  Key,
                                                                  generate_value(Key))
@@ -242,7 +238,9 @@ test_mixedload() ->
                                                     {BucketName, Key} =
                                                         pick_random_bucket_and_key(BucketNames,
                                                                                    Keys),
-                                                    server:retrieve(ServerPid, BucketName, Key)
+                                                    server:retrieve(ClientServerPid,
+                                                                    BucketName,
+                                                                    Key)
                                                  end,
                                                  lists:seq(1, NumberOfReadOperations)),
                                    BenchmarkPid ! done
@@ -252,3 +250,15 @@ test_mixedload() ->
                      lists:foreach(fun(_) -> receive done -> ok end end, Pids)
                   end,
                   30).
+
+test_centralized_mixedload() ->
+    test_mixedload(central()).
+
+test_multi_decentral_cached_mixedload() ->
+    test_mixedload(multi_decentral_cached()).
+
+central() ->
+    fun(Buckets) -> server_centralized:initialize_with(Buckets) end.
+
+multi_decentral_cached() ->
+    fun(Buckets) -> server_decentralized:initialize_with(Buckets) end.

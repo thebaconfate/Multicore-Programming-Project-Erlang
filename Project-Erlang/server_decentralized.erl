@@ -4,7 +4,7 @@
 
 -export([initialize/0, initialize_with/1, server_actor/2, client_actor/2, bucket_actor/2,
          initialize_test/0, connect_test/0, disconnect_test/0, create_test/0, store_test/0,
-         delete_test/0, multiple_clients_test/0]).
+         delete_test/0, multiple_clients_test/0, non_empty_dict_test/0]).
 
 find_key(Dict, Key) ->
     dict:find(Key, Dict).
@@ -18,11 +18,24 @@ delete_key(Dict, Key) ->
 initialize() ->
     initialize_with(dict:new()).
 
-initialize_with(Buckets) ->
+initialize_with(InitBuckets) ->
+    Buckets = initialize_buckets(InitBuckets),
     ServerPid = spawn_link(?MODULE, server_actor, [[], Buckets]),
     catch unregister(server_actor),
     register(server_actor, ServerPid),
     ServerPid.
+
+initialize_buckets(InitBuckets) ->
+    io:format("Converting initbuckets"),
+    ListOfInitBuckets = dict:to_list(InitBuckets),
+    ListOfBuckets =
+        lists:map(fun({BucketName, Store}) ->
+                     BucketActor = new_bucket(BucketName, Store),
+                     {BucketName, BucketActor}
+                  end,
+                  ListOfInitBuckets),
+    %io:format("List of BucketsActors: ~p~n", [ListOfBuckets]),
+    dict:from_list(ListOfBuckets).
 
 server_actor(Clients, Buckets) ->
     receive
@@ -35,28 +48,24 @@ server_actor(Clients, Buckets) ->
                           end,
                           Clients),
             NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
+            server_actor(Clients, NewBuckets);
+        {Sender, connect} ->
+            NewClient = new_client(self(), Buckets),
+            Sender ! {NewClient, connected},
+            server_actor([NewClient | Clients], Buckets);
+        {Sender, disconnect} ->
+            NewClients = Clients -- [Sender],
+            server_actor(NewClients, Buckets);
+        {Client, replicate, ReplicaName, ReplicaBucket} ->
+            lists:foreach(fun(OtherClient) ->
+                             if OtherClient /= Client ->
+                                    OtherClient ! {self(), replicate, ReplicaName, ReplicaBucket};
+                                true -> true
+                             end
+                          end,
+                          Clients),
+            NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
             server_actor(Clients, NewBuckets)
-    after 100 ->
-        receive
-            {Sender, connect} ->
-                NewClient = new_client(self(), Buckets),
-                Sender ! {NewClient, connected},
-                server_actor([NewClient | Clients], Buckets);
-            {Sender, disconnect} ->
-                NewClients = Clients -- [Sender],
-                server_actor(NewClients, Buckets);
-            {Client, replicate, ReplicaName, ReplicaBucket} ->
-                lists:foreach(fun(OtherClient) ->
-                                 if OtherClient /= Client ->
-                                        OtherClient
-                                        ! {self(), replicate, ReplicaName, ReplicaBucket};
-                                    true -> true
-                                 end
-                              end,
-                              Clients),
-                NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
-                server_actor(Clients, NewBuckets)
-        end
     end.
 
 new_client(ServerPid, Buckets) ->
@@ -71,7 +80,7 @@ client_actor(Server, Buckets) ->
             NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
             client_actor(Server, NewBuckets);
         {Client, create, BucketName} ->
-            Bucket = new_bucket(BucketName),
+            Bucket = new_bucket(BucketName, dict:new()),
             NewBuckets = store_key(Buckets, BucketName, Bucket),
             Server ! {self(), replicate, BucketName, Bucket},
             Client ! {self(), created, BucketName},
@@ -113,7 +122,7 @@ client_actor(Server, Buckets, CachedBucketName, CachedBucket) ->
             NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
             client_actor(Server, NewBuckets, CachedBucketName, CachedBucket);
         {Client, create, BucketName} ->
-            Bucket = new_bucket(BucketName),
+            Bucket = new_bucket(BucketName, dict:new()),
             NewBuckets = store_key(Buckets, BucketName, Bucket),
             Server ! {self(), replicate, BucketName, Bucket},
             Client ! {self(), created, BucketName},
@@ -142,8 +151,8 @@ client_actor(Server, Buckets, CachedBucketName, CachedBucket) ->
             end
     end.
 
-new_bucket(Name) ->
-    spawn(?MODULE, bucket_actor, [Name, dict:new()]).
+new_bucket(Name, Store) ->
+    spawn(?MODULE, bucket_actor, [Name, Store]).
 
 bucket_actor(BucketName, Store) ->
     receive
@@ -198,6 +207,10 @@ initialize_test() ->
     catch unregister(server_actor),
     initialize().
 
+initialize_test_with(Buckets) ->
+    catch unregister(server_actor),
+    initialize_with(Buckets).
+
 % Test connect function.
 connect_test() ->
     ServerPid = initialize_test(),
@@ -250,6 +263,16 @@ delete_test() ->
     ?assertMatch({_, not_found, "shopping", "eggs"},
                  server:retrieve(ServerPid, "shopping", "eggs")),
     ServerPid.
+
+non_empty_dict_test() ->
+    NumberOfBuckets = 1000,
+    NumberOfKeysPerBucket = 100,
+    Seq = lists:seq(1, NumberOfKeysPerBucket),
+    StoreAsList = lists:map(fun(Key) -> {Key, 1} end, Seq),
+    Store = dict:from_list(StoreAsList),
+    BucketsAsList = lists:map(fun(Key) -> {Key, Store} end, lists:seq(1, NumberOfBuckets)),
+    Buckets = dict:from_list(BucketsAsList),
+    initialize_with(Buckets).
 
 multiple_clients_test() ->
     ServerPid = initialize_test(),
