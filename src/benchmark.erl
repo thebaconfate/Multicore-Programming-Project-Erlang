@@ -168,7 +168,7 @@ test_centralized_readwrite() ->
     test_readwrite(central()).
 
 test_multi_decentral_cached_readwrite() ->
-    test_readwrite(multi_decentral_cached()).
+    test_readwrite(multi_shard_cache()).
 
 % Test read-only operations.
 %
@@ -205,7 +205,7 @@ test_centralized_readonly() ->
     test_readonly(central()).
 
 test_multi_decentral_cached_readonly() ->
-    test_readonly(multi_decentral_cached()).
+    test_readonly(multi_shard_cache()).
 
 % Test a load of 99% retrieve and 1% store operations.
 %
@@ -254,10 +254,10 @@ test_centralized_mixedload() ->
     test_mixedload(central()).
 
 test_multi_decentral_cached_mixedload() ->
-    test_mixedload(multi_decentral_cached()).
+    test_mixedload(multi_shard_cache()).
 
 central() ->
     fun(Buckets) -> server_centralized:initialize_with(Buckets) end.
 
-multi_decentral_cached() ->
-    fun(Buckets) -> server_decentralized:initialize_with(Buckets) end.
+multi_shard_cache() ->
+    fun(Buckets) -> server_multi_shard_cache:initialize_with(Buckets) end.

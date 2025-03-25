@@ -1,4 +1,4 @@
--module(server_decentralized).
+-module(server_multi_shard_cache).
 
 -include_lib("eunit/include/eunit.hrl").
 
