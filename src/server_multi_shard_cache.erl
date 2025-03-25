@@ -2,18 +2,9 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--export([initialize/0, initialize_with/1, server_actor/2, client_actor/2, bucket_actor/2,
+-export([initialize/0, initialize_with/1, server_actor/2, initialize_test_with/1,
          initialize_test/0, connect_test/0, disconnect_test/0, create_test/0, store_test/0,
          delete_test/0, multiple_clients_test/0, non_empty_dict_test/0]).
-
-find_key(Dict, Key) ->
-    dict:find(Key, Dict).
-
-store_key(Dict, Key, Value) ->
-    dict:store(Key, Value, Dict).
-
-delete_key(Dict, Key) ->
-    dict:erase(Key, Dict).
 
 initialize() ->
     initialize_with(dict:new()).
@@ -28,7 +19,7 @@ initialize_with(InitBuckets) ->
 initialize_buckets(InitBuckets) ->
     io:format("Converting initbuckets"),
     dict:fold(fun(BucketName, Store, AccIn) ->
-                 Bucket = new_bucket(BucketName, Store),
+                 Bucket = bucket:new(BucketName, Store),
                  dict:store(BucketName, Bucket, AccIn)
               end,
               dict:new(),
@@ -44,150 +35,15 @@ server_actor(Clients, Buckets) ->
                              end
                           end,
                           Clients),
-            NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
+            NewBuckets = dict:store(ReplicaName, ReplicaBucket, Buckets),
             server_actor(Clients, NewBuckets);
         {Sender, connect} ->
-            NewClient = new_client(self(), Buckets),
+            NewClient = worker:new(self(), Buckets),
             Sender ! {NewClient, connected},
             server_actor([NewClient | Clients], Buckets);
         {Sender, disconnect} ->
             NewClients = Clients -- [Sender],
             server_actor(NewClients, Buckets)
-    end.
-
-new_client(ServerPid, Buckets) ->
-    spawn(?MODULE, client_actor, [ServerPid, Buckets]).
-
-client_actor(Server, Buckets) ->
-    receive
-        {Client, disconnect} ->
-            Server ! {self(), disconnect},
-            Client ! {self(), disconnected};
-        {_, replicate, ReplicaName, ReplicaBucket} ->
-            NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
-            client_actor(Server, NewBuckets);
-        {Client, create, BucketName} ->
-            Bucket = new_bucket(BucketName, dict:new()),
-            NewBuckets = store_key(Buckets, BucketName, Bucket),
-            Server ! {self(), replicate, BucketName, Bucket},
-            Client ! {self(), created, BucketName},
-            client_actor(Server, NewBuckets);
-        {Client, store, BucketName, Key, Value} ->
-            case find_key(Buckets, BucketName) of
-                {ok, Bucket} ->
-                    Bucket ! {Client, store, Key, Value};
-                error ->
-                    Client ! {self(), not_found, BucketName, Key}
-            end,
-            client_actor(Server, Buckets);
-        {Client, retrieve, BucketName, Key} ->
-            case find_key(Buckets, BucketName) of
-                {ok, Bucket} ->
-                    Bucket ! {Client, retrieve, Key},
-                    client_actor(Server, Buckets, BucketName, Bucket);
-                error ->
-                    Client ! {self(), not_found, BucketName, Key},
-                    client_actor(Server, Buckets)
-            end;
-        {Client, delete, BucketName, Key} ->
-            case find_key(Buckets, BucketName) of
-                {ok, Bucket} ->
-                    Bucket ! {Client, delete, Key},
-                    client_actor(Server, Buckets, BucketName, Bucket);
-                error ->
-                    Client ! {self(), not_found, BucketName, Key},
-                    client_actor(Server, Buckets)
-            end
-    end.
-
-client_actor(Server, Buckets, CachedBucketName, CachedBucket) ->
-    receive
-        {Client, disconnect} ->
-            Server ! {self(), disconnect},
-            Client ! {self(), disconnected};
-        {_, replicate, ReplicaName, ReplicaBucket} ->
-            NewBuckets = store_key(Buckets, ReplicaName, ReplicaBucket),
-            client_actor(Server, NewBuckets, CachedBucketName, CachedBucket);
-        {Client, create, BucketName} ->
-            Bucket = new_bucket(BucketName, dict:new()),
-            NewBuckets = store_key(Buckets, BucketName, Bucket),
-            Server ! {self(), replicate, BucketName, Bucket},
-            Client ! {self(), created, BucketName},
-            client_actor(Server, NewBuckets, CachedBucketName, CachedBucket);
-        {Client, store, BucketName, Key, Value} ->
-            Bucket = find_key(Buckets, BucketName),
-            Bucket ! {Client, store, Key, Value},
-            client_actor(Server, Buckets, CachedBucketName, CachedBucket);
-        {Client, retrieve, BucketName, Key} ->
-            case find_key(Buckets, BucketName) of
-                {ok, Bucket} ->
-                    Bucket ! {Client, retrieve, Key},
-                    client_actor(Server, Buckets, BucketName, Bucket);
-                error ->
-                    Client ! {self(), not_found, BucketName, Key},
-                    client_actor(Server, Buckets, CachedBucketName, CachedBucket)
-            end;
-        {Client, delete, BucketName, Key} ->
-            case find_key(Buckets, BucketName) of
-                {ok, Bucket} ->
-                    Bucket ! {Client, delete, Key},
-                    client_actor(Server, Buckets, BucketName, Bucket);
-                error ->
-                    Client ! {self(), not_found, BucketName, Key},
-                    client_actor(Server, Buckets, CachedBucketName, CachedBucket)
-            end
-    end.
-
-new_bucket(Name, Store) ->
-    spawn(?MODULE, bucket_actor, [Name, Store]).
-
-bucket_actor(BucketName, Store) ->
-    receive
-        {Sender, store, Key, Value} ->
-            NewStore = store_key(Store, Key, Value),
-            Sender ! {self(), stored, BucketName, Key},
-            bucket_actor(BucketName, NewStore);
-        {Sender, retrieve, Key} ->
-            case find_key(Store, Key) of
-                {ok, Value} ->
-                    Sender ! {self(), retrieved, BucketName, Key, Value},
-                    bucket_actor(BucketName, Store, Key, Value);
-                error ->
-                    Sender ! {self(), not_found, BucketName, Key},
-                    bucket_actor(BucketName, Store)
-            end;
-        {Sender, delete, Key} ->
-            NewStore = delete_key(Store, Key),
-            Sender ! {self(), deleted, BucketName, Key},
-            bucket_actor(BucketName, NewStore)
-    end.
-
-bucket_actor(BucketName, Store, CachedKey, CachedValue) ->
-    receive
-        {Sender, store, Key, Value} ->
-            NewStore = store_key(Store, Key, Value),
-            Sender ! {self(), stored, BucketName, Key},
-            bucket_actor(BucketName, NewStore, CachedKey, CachedValue);
-        {Sender, retrieve, Key} when CachedKey == Key ->
-            Sender ! {self(), retrieved, BucketName, CachedKey, CachedValue},
-            bucket_actor(BucketName, Store, CachedKey, CachedValue);
-        {Sender, retrieve, Key} ->
-            case find_key(Store, Key) of
-                {ok, Value} ->
-                    Sender ! {self(), retrieved, BucketName, Key, Value},
-                    bucket_actor(BucketName, Store, Key, Value);
-                error ->
-                    Sender ! {self(), not_found, BucketName, Key},
-                    bucket_actor(BucketName, Store, CachedKey, CachedValue)
-            end;
-        {Sender, delete, Key} when CachedKey == Key ->
-            NewStore = delete_key(Store, Key),
-            Sender ! {self(), deleted, BucketName, Key},
-            bucket_actor(BucketName, NewStore);
-        {Sender, delete, Key} ->
-            NewStore = delete_key(Store, Key),
-            Sender ! {self(), deleted, BucketName, Key},
-            bucket_actor(BucketName, NewStore, CachedKey, CachedValue)
     end.
 
 initialize_test() ->
