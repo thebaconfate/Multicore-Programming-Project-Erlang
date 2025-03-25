@@ -1,0 +1,95 @@
+Parameters:
+Number of buckets: 1000
+Number of keys per bucket: 100
+Number of keys total: 100000
+
+Converting initbucketsStarting benchmark mixedload: 1
+Wall clock time = 66.265 ms
+mixedload done
+Starting benchmark mixedload: 2
+Wall clock time = 53.162 ms
+mixedload done
+Starting benchmark mixedload: 3
+Wall clock time = 47.788 ms
+mixedload done
+Starting benchmark mixedload: 4
+Wall clock time = 48.076 ms
+mixedload done
+Starting benchmark mixedload: 5
+Wall clock time = 46.61 ms
+mixedload done
+Starting benchmark mixedload: 6
+Wall clock time = 48.593 ms
+mixedload done
+Starting benchmark mixedload: 7
+Wall clock time = 51.11 ms
+mixedload done
+Starting benchmark mixedload: 8
+Wall clock time = 47.851 ms
+mixedload done
+Starting benchmark mixedload: 9
+Wall clock time = 46.352 ms
+mixedload done
+Starting benchmark mixedload: 10
+Wall clock time = 46.404 ms
+mixedload done
+Starting benchmark mixedload: 11
+Wall clock time = 47.906 ms
+mixedload done
+Starting benchmark mixedload: 12
+Wall clock time = 47.581 ms
+mixedload done
+Starting benchmark mixedload: 13
+Wall clock time = 48.436 ms
+mixedload done
+Starting benchmark mixedload: 14
+Wall clock time = 47.237 ms
+mixedload done
+Starting benchmark mixedload: 15
+Wall clock time = 49.27 ms
+mixedload done
+Starting benchmark mixedload: 16
+Wall clock time = 48.006 ms
+mixedload done
+Starting benchmark mixedload: 17
+Wall clock time = 47.366 ms
+mixedload done
+Starting benchmark mixedload: 18
+Wall clock time = 47.344 ms
+mixedload done
+Starting benchmark mixedload: 19
+Wall clock time = 47.705 ms
+mixedload done
+Starting benchmark mixedload: 20
+Wall clock time = 47.142 ms
+mixedload done
+Starting benchmark mixedload: 21
+Wall clock time = 47.639 ms
+mixedload done
+Starting benchmark mixedload: 22
+Wall clock time = 47.12 ms
+mixedload done
+Starting benchmark mixedload: 23
+Wall clock time = 46.821 ms
+mixedload done
+Starting benchmark mixedload: 24
+Wall clock time = 46.623 ms
+mixedload done
+Starting benchmark mixedload: 25
+Wall clock time = 46.44 ms
+mixedload done
+Starting benchmark mixedload: 26
+Wall clock time = 48.893 ms
+mixedload done
+Starting benchmark mixedload: 27
+Wall clock time = 50.724 ms
+mixedload done
+Starting benchmark mixedload: 28
+Wall clock time = 48.304 ms
+mixedload done
+Starting benchmark mixedload: 29
+Wall clock time = 47.626 ms
+mixedload done
+Starting benchmark mixedload: 30
+Wall clock time = 47.438 ms
+mixedload done

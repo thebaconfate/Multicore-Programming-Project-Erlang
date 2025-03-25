@@ -1,0 +1,96 @@
+Parameters:
+Number of buckets: 1000
+Number of keys per bucket: 100
+Number of keys total: 100000
+
+ServerPid: <0.79.0>
+Starting benchmark readwrite: 1
+Wall clock time = 971.267 ms
+readwrite done
+Starting benchmark readwrite: 2
+Wall clock time = 814.822 ms
+readwrite done
+Starting benchmark readwrite: 3
+Wall clock time = 843.061 ms
+readwrite done
+Starting benchmark readwrite: 4
+Wall clock time = 876.725 ms
+readwrite done
+Starting benchmark readwrite: 5
+Wall clock time = 838.836 ms
+readwrite done
+Starting benchmark readwrite: 6
+Wall clock time = 800.085 ms
+readwrite done
+Starting benchmark readwrite: 7
+Wall clock time = 870.11 ms
+readwrite done
+Starting benchmark readwrite: 8
+Wall clock time = 863.172 ms
+readwrite done
+Starting benchmark readwrite: 9
+Wall clock time = 839.103 ms
+readwrite done
+Starting benchmark readwrite: 10
+Wall clock time = 847.823 ms
+readwrite done
+Starting benchmark readwrite: 11
+Wall clock time = 719.153 ms
+readwrite done
+Starting benchmark readwrite: 12
+Wall clock time = 884.915 ms
+readwrite done
+Starting benchmark readwrite: 13
+Wall clock time = 855.141 ms
+readwrite done
+Starting benchmark readwrite: 14
+Wall clock time = 796.065 ms
+readwrite done
+Starting benchmark readwrite: 15
+Wall clock time = 854.943 ms
+readwrite done
+Starting benchmark readwrite: 16
+Wall clock time = 878.312 ms
+readwrite done
+Starting benchmark readwrite: 17
+Wall clock time = 834.026 ms
+readwrite done
+Starting benchmark readwrite: 18
+Wall clock time = 811.814 ms
+readwrite done
+Starting benchmark readwrite: 19
+Wall clock time = 842.532 ms
+readwrite done
+Starting benchmark readwrite: 20
+Wall clock time = 782.658 ms
+readwrite done
+Starting benchmark readwrite: 21
+Wall clock time = 867.445 ms
+readwrite done
+Starting benchmark readwrite: 22
+Wall clock time = 795.19 ms
+readwrite done
+Starting benchmark readwrite: 23
+Wall clock time = 853.627 ms
+readwrite done
+Starting benchmark readwrite: 24
+Wall clock time = 890.25 ms
+readwrite done
+Starting benchmark readwrite: 25
+Wall clock time = 842.85 ms
+readwrite done
+Starting benchmark readwrite: 26
+Wall clock time = 799.847 ms
+readwrite done
+Starting benchmark readwrite: 27
+Wall clock time = 769.684 ms
+readwrite done
+Starting benchmark readwrite: 28
+Wall clock time = 862.997 ms
+readwrite done
+Starting benchmark readwrite: 29
+Wall clock time = 860.626 ms
+readwrite done
+Starting benchmark readwrite: 30
+Wall clock time = 797.381 ms
+readwrite done

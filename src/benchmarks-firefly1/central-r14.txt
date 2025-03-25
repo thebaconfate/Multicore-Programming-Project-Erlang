@@ -1,0 +1,95 @@
+Parameters:
+Number of buckets: 1000
+Number of keys per bucket: 100
+Number of keys total: 100000
+
+Starting benchmark readonly: 1
+Wall clock time = 493.94 ms
+readonly done
+Starting benchmark readonly: 2
+Wall clock time = 431.506 ms
+readonly done
+Starting benchmark readonly: 3
+Wall clock time = 401.698 ms
+readonly done
+Starting benchmark readonly: 4
+Wall clock time = 399.456 ms
+readonly done
+Starting benchmark readonly: 5
+Wall clock time = 415.357 ms
+readonly done
+Starting benchmark readonly: 6
+Wall clock time = 421.949 ms
+readonly done
+Starting benchmark readonly: 7
+Wall clock time = 408.777 ms
+readonly done
+Starting benchmark readonly: 8
+Wall clock time = 411.23 ms
+readonly done
+Starting benchmark readonly: 9
+Wall clock time = 419.044 ms
+readonly done
+Starting benchmark readonly: 10
+Wall clock time = 415.93 ms
+readonly done
+Starting benchmark readonly: 11
+Wall clock time = 419.616 ms
+readonly done
+Starting benchmark readonly: 12
+Wall clock time = 416.559 ms
+readonly done
+Starting benchmark readonly: 13
+Wall clock time = 416.307 ms
+readonly done
+Starting benchmark readonly: 14
+Wall clock time = 422.885 ms
+readonly done
+Starting benchmark readonly: 15
+Wall clock time = 408.107 ms
+readonly done
+Starting benchmark readonly: 16
+Wall clock time = 402.952 ms
+readonly done
+Starting benchmark readonly: 17
+Wall clock time = 416.365 ms
+readonly done
+Starting benchmark readonly: 18
+Wall clock time = 406.229 ms
+readonly done
+Starting benchmark readonly: 19
+Wall clock time = 415.509 ms
+readonly done
+Starting benchmark readonly: 20
+Wall clock time = 406.88 ms
+readonly done
+Starting benchmark readonly: 21
+Wall clock time = 417.521 ms
+readonly done
+Starting benchmark readonly: 22
+Wall clock time = 427.185 ms
+readonly done
+Starting benchmark readonly: 23
+Wall clock time = 418.875 ms
+readonly done
+Starting benchmark readonly: 24
+Wall clock time = 418.205 ms
+readonly done
+Starting benchmark readonly: 25
+Wall clock time = 402.486 ms
+readonly done
+Starting benchmark readonly: 26
+Wall clock time = 446.435 ms
+readonly done
+Starting benchmark readonly: 27
+Wall clock time = 421.205 ms
+readonly done
+Starting benchmark readonly: 28
+Wall clock time = 403.672 ms
+readonly done
+Starting benchmark readonly: 29
+Wall clock time = 422.647 ms
+readonly done
+Starting benchmark readonly: 30
+Wall clock time = 413.278 ms
+readonly done
