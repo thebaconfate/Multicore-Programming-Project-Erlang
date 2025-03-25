@@ -156,7 +156,6 @@ test_readwrite(CreateServer) ->
                                                     server:retrieve(ClientPid, BucketName, Key)
                                                  end,
                                                  lists:seq(1, NumberOfOperations)),
-                                   server:disconnect(ClientPid),
                                    BenchmarkPid ! done
                                 end)
                           || _ <- lists:seq(1, NumberOfClients)],
