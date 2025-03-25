@@ -1,4 +1,4 @@
--module(bucket).
+-module(cbucket).
 
 -export([new/2, bucket/2, cached_bucket/4]).
 
@@ -29,9 +29,8 @@ bucket(BucketName, Store) ->
 cached_bucket(BucketName, Store, CachedKey, CachedValue) ->
     receive
         {Sender, store, Key, Value} ->
-            NewStore = dict:store(Key, Value, Store),
             Sender ! {self(), stored, BucketName, Key},
-            cached_bucket(BucketName, NewStore, CachedKey, CachedValue);
+            cached_bucket(BucketName, dict:store(Key, Value, Store), CachedKey, CachedValue);
         {Sender, retrieve, Key} when CachedKey == Key ->
             Sender ! {self(), retrieved, BucketName, CachedKey, CachedValue},
             cached_bucket(BucketName, Store, CachedKey, CachedValue);

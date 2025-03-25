@@ -17,10 +17,8 @@ initialize_with(InitBuckets) ->
     ServerPid.
 
 initialize_buckets(InitBuckets) ->
-    io:format("Converting initbuckets"),
     dict:fold(fun(BucketName, Store, AccIn) ->
-                 Bucket = bucket:new(BucketName, Store),
-                 dict:store(BucketName, Bucket, AccIn)
+                 dict:store(BucketName, bucket:new(BucketName, Store), AccIn)
               end,
               dict:new(),
               InitBuckets).
@@ -38,7 +36,7 @@ server_actor(Clients, Buckets) ->
             NewBuckets = dict:store(ReplicaName, ReplicaBucket, Buckets),
             server_actor(Clients, NewBuckets);
         {Sender, connect} ->
-            NewClient = worker:new(self(), Buckets),
+            NewClient = cworker:new(self(), Buckets),
             Sender ! {NewClient, connected},
             server_actor([NewClient | Clients], Buckets);
         {Sender, disconnect} ->

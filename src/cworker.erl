@@ -1,9 +1,9 @@
--module(worker).
+-module(cworker).
 
 -export([new/2, worker/2]).
 
 new(ServerPid, BucketPid) ->
-    spawn(?MODULE, client_actor, [ServerPid, BucketPid]).
+    spawn(?MODULE, worker, [ServerPid, BucketPid]).
 
 worker(Server, Buckets) ->
     receive
@@ -11,27 +11,29 @@ worker(Server, Buckets) ->
             Server ! {self(), disconnect},
             Client ! {self(), disconnected};
         {_, replicate, ReplicaName, ReplicaBucket} ->
-            NewBuckets = dict:store(ReplicaName, ReplicaBucket, Buckets),
-            worker(Server, NewBuckets);
+            worker(Server, dict:store(ReplicaName, ReplicaBucket, Buckets));
         {Client, create, BucketName} ->
-            Bucket = bucket:new(BucketName, dict:new()),
-            NewBuckets = dict:store(BucketName, Bucket, Buckets),
+            Bucket = cbucket:new(BucketName, dict:new()),
             Server ! {self(), replicate, BucketName, Bucket},
             Client ! {self(), created, BucketName},
-            worker(Server, NewBuckets);
+            worker(Server, dict:store(BucketName, Bucket, Buckets));
         {Client, store, BucketName, Key, Value} ->
             case dict:find(BucketName, Buckets) of
                 {ok, Bucket} ->
-                    Bucket ! {Client, store, Key, Value};
+                    Bucket ! {Client, store, Key, Value},
+                    cworker(Server, Buckets, BucketName, Bucket);
                 error ->
-                    Client ! {self(), not_found, BucketName, Key}
-            end,
-            worker(Server, Buckets);
+                    Store = dict:from_list([{Key, Value}]),
+                    Bucket = cbucket:new(BucketName, Store),
+                    Server ! {self(), replicate, BucketName, Bucket},
+                    Client ! {self(), stored, BucketName, Key},
+                    worker(Server, Buckets)
+            end;
         {Client, retrieve, BucketName, Key} ->
             case dict:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, retrieve, Key},
-                    cached_worker(Server, Buckets, BucketName, Bucket);
+                    cworker(Server, Buckets, BucketName, Bucket);
                 error ->
                     Client ! {self(), not_found, BucketName, Key},
                     worker(Server, Buckets)
@@ -40,58 +42,60 @@ worker(Server, Buckets) ->
             case dict:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, delete, Key},
-                    cached_worker(Server, Buckets, BucketName, Bucket);
+                    cworker(Server, Buckets, BucketName, Bucket);
                 error ->
                     Client ! {self(), not_found, BucketName, Key},
                     worker(Server, Buckets)
             end
     end.
 
-cached_worker(Server, Buckets, CachedBucketName, CachedBucket) ->
+cworker(Server, Buckets, CachedBucketName, CachedBucket) ->
     receive
         {Client, disconnect} ->
             Server ! {self(), disconnect},
             Client ! {self(), disconnected};
         {_, replicate, ReplicaName, ReplicaBucket} ->
             NewBuckets = dict:store(ReplicaName, ReplicaBucket, Buckets),
-            cached_worker(Server, NewBuckets, CachedBucketName, CachedBucket);
+            cworker(Server, NewBuckets, CachedBucketName, CachedBucket);
         {Client, create, BucketName} ->
-            Bucket = bucket:new(BucketName, dict:new()),
-            NewBuckets = dict:store(BucketName, Bucket, Buckets),
+            Bucket = cbucket:new(BucketName, dict:new()),
             Server ! {self(), replicate, BucketName, Bucket},
             Client ! {self(), created, BucketName},
-            cached_worker(Server, NewBuckets, CachedBucketName, CachedBucket);
+            cworker(Server,
+                    dict:store(BucketName, Bucket, Buckets),
+                    CachedBucketName,
+                    CachedBucket);
+        {Client, Operation, BucketName, Key, Value} when BucketName == CachedBucketName ->
+            CachedBucket ! {Client, Operation, Key, Value},
+            cworker(Server, Buckets, CachedBucketName, CachedBucket);
         {Client, store, BucketName, Key, Value} ->
             case dict:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, store, Key, Value},
-                    cached_worker(Server, Buckets, BucketName, Bucket);
+                    cworker(Server, Buckets, BucketName, Bucket);
                 error ->
                     Store = dict:from_list([{Key, Value}]),
-                    Bucket = bucket:new(BucketName, Store),
+                    Bucket = cbucket:new(BucketName, Store),
                     Server ! {self(), replicate, BucketName, Bucket},
                     Client ! {self(), stored, BucketName, Key},
-                    cached_worker(Server,
-                                  dict:store(Bucket, Buckets),
-                                  CachedBucketName,
-                                  CachedBucket)
+                    cworker(Server, dict:store(Bucket, Buckets), CachedBucketName, CachedBucket)
             end;
         {Client, retrieve, BucketName, Key} ->
             case dict:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, retrieve, Key},
-                    cached_worker(Server, Buckets, BucketName, Bucket);
+                    cworker(Server, Buckets, BucketName, Bucket);
                 error ->
                     Client ! {self(), not_found, BucketName, Key},
-                    cached_worker(Server, Buckets, CachedBucketName, CachedBucket)
+                    cworker(Server, Buckets, CachedBucketName, CachedBucket)
             end;
         {Client, delete, BucketName, Key} ->
             case dict:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, delete, Key},
-                    cached_worker(Server, Buckets, BucketName, Bucket);
+                    cworker(Server, Buckets, BucketName, Bucket);
                 error ->
                     Client ! {self(), not_found, BucketName, Key},
-                    cached_worker(Server, Buckets, CachedBucketName, CachedBucket)
+                    cworker(Server, Buckets, CachedBucketName, CachedBucket)
             end
     end.
