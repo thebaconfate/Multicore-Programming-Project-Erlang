@@ -1,19 +1,17 @@
--module(server_multi_shard_cache).
+-module(server_worker_shard_cache).
 
 -include_lib("eunit/include/eunit.hrl").
 
--export([initialize/0, initialize_with/1, server_actor/2, initialize_test_with/1,
-         initialize_test/0, connect_test/0, disconnect_test/0, create_test/0, store_test/0,
-         delete_test/0, multiple_clients_test/0, non_empty_dict_test/0]).
+-export([initialize/0, initialize_with/1, server/2, initialize_test_with/1]).
 
 initialize() ->
     initialize_with(dict:new()).
 
 initialize_with(InitBuckets) ->
     Buckets = initialize_buckets(InitBuckets),
-    ServerPid = spawn_link(?MODULE, server_actor, [[], Buckets]),
-    catch unregister(server_actor),
-    register(server_actor, ServerPid),
+    ServerPid = spawn_link(?MODULE, server, [[], Buckets]),
+    catch unregister(server),
+    register(server, ServerPid),
     ServerPid.
 
 initialize_buckets(InitBuckets) ->
@@ -23,7 +21,7 @@ initialize_buckets(InitBuckets) ->
               dict:new(),
               InitBuckets).
 
-server_actor(Clients, Buckets) ->
+server(Clients, Buckets) ->
     receive
         {Client, replicate, ReplicaName, ReplicaBucket} ->
             lists:foreach(fun(OtherClient) ->
@@ -34,22 +32,22 @@ server_actor(Clients, Buckets) ->
                           end,
                           Clients),
             NewBuckets = dict:store(ReplicaName, ReplicaBucket, Buckets),
-            server_actor(Clients, NewBuckets);
+            server(Clients, NewBuckets);
         {Sender, connect} ->
             NewClient = cworker:new(self(), Buckets),
             Sender ! {NewClient, connected},
-            server_actor([NewClient | Clients], Buckets);
+            server([NewClient | Clients], Buckets);
         {Sender, disconnect} ->
             NewClients = Clients -- [Sender],
-            server_actor(NewClients, Buckets)
+            server(NewClients, Buckets)
     end.
 
 initialize_test() ->
-    catch unregister(server_actor),
+    catch unregister(server),
     initialize().
 
 initialize_test_with(Buckets) ->
-    catch unregister(server_actor),
+    catch unregister(server),
     initialize_with(Buckets).
 
 % Test connect function.

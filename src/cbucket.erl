@@ -3,7 +3,7 @@
 -export([new/2, bucket/2, cached_bucket/4]).
 
 new(Name, Store) ->
-    spawn(?MODULE, bucket_actor, [Name, Store]).
+    spawn(?MODULE, bucket, [Name, Store]).
 
 bucket(BucketName, Store) ->
     receive

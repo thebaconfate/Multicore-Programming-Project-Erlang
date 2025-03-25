@@ -2,8 +2,8 @@
 
 -export([new/2, worker/2]).
 
-new(ServerPid, BucketPid) ->
-    spawn(?MODULE, worker, [ServerPid, BucketPid]).
+new(ServerPid, Bucket) ->
+    spawn(?MODULE, worker, [ServerPid, Bucket]).
 
 worker(Server, Buckets) ->
     receive

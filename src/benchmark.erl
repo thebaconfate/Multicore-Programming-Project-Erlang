@@ -1,8 +1,10 @@
 -module(benchmark).
 
--export([test_centralized_readwrite/0, test_multi_decentral_cached_readwrite/0,
-         test_centralized_readonly/0, test_multi_decentral_cached_readonly/0,
-         test_centralized_mixedload/0, test_multi_decentral_cached_mixedload/0]).
+-export([test_centralized_readwrite/0, test_shard_cached_readwrite/0,
+         test_worker_shard_cached_readwrite/0, test_centralized_readonly/0,
+         test_shard_cached_readonly/0, test_worker_shard_cached_readonly/0,
+         test_centralized_mixedload/0, test_shard_cached_mixedload/0,
+         test_worker_shard_cached_mixedload/0]).
 
 %% Benchmark helpers
 
@@ -167,8 +169,11 @@ test_readwrite(CreateServer) ->
 test_centralized_readwrite() ->
     test_readwrite(central()).
 
-test_multi_decentral_cached_readwrite() ->
-    test_readwrite(multi_shard_cache()).
+test_shard_cached_readwrite() ->
+    test_readwrite(shard_cached()).
+
+test_worker_shard_cached_readwrite() ->
+    test_readwrite(worker_shard_cached()).
 
 % Test read-only operations.
 %
@@ -204,8 +209,11 @@ test_readonly(CreateServer) ->
 test_centralized_readonly() ->
     test_readonly(central()).
 
-test_multi_decentral_cached_readonly() ->
-    test_readonly(multi_shard_cache()).
+test_shard_cached_readonly() ->
+    test_readonly(shard_cached()).
+
+test_worker_shard_cached_readonly() ->
+    test_readonly(worker_shard_cached()).
 
 % Test a load of 99% retrieve and 1% store operations.
 %
@@ -253,11 +261,17 @@ test_mixedload(CreateServer) ->
 test_centralized_mixedload() ->
     test_mixedload(central()).
 
-test_multi_decentral_cached_mixedload() ->
-    test_mixedload(multi_shard_cache()).
+test_shard_cached_mixedload() ->
+    test_mixedload(shard_cached()).
+
+test_worker_shard_cached_mixedload() ->
+    test_mixedload(worker_shard_cached()).
 
 central() ->
     fun(Buckets) -> server_centralized:initialize_with(Buckets) end.
 
-multi_shard_cache() ->
-    fun(Buckets) -> server_multi_shard_cache:initialize_with(Buckets) end.
+worker_shard_cached() ->
+    fun(Buckets) -> server_worker_shard_cache:initialize_with(Buckets) end.
+
+shard_cached() ->
+    fun(Buckets) -> server_shard_cache:initialize_with(Buckets) end.

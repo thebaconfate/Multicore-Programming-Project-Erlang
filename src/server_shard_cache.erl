@@ -6,15 +6,15 @@ initialize() ->
     initialize_with(dict:new()).
 
 initialize_with(InitBuckets) ->
-    Buckets = initialize_buckets(InitBuckets),
+    Buckets = initialize_cbuckets(InitBuckets),
     ServerPid = server(Buckets),
     catch unregister(server_actor),
     register(server_actor, ServerPid),
     ServerPid.
 
-initialize_buckets(InitBuckets) ->
+initialize_cbuckets(InitBuckets) ->
     dict:fold(fun(BucketName, Bucket, AccIn) ->
-                 dict:store(BucketName, bucket:new(BucketName, Bucket), AccIn)
+                 dict:store(BucketName, cbucket:new(BucketName, Bucket), AccIn)
               end,
               dict:new(),
               InitBuckets).
@@ -34,7 +34,7 @@ server(Buckets) ->
                     cserver(Buckets, BucketName, Bucket);
                 error ->
                     Store = dict:from_list({Key, Value}),
-                    NewBucket = bucket:new(BucketName, Store),
+                    NewBucket = cbucket:new(BucketName, Store),
                     Client ! {self(), stored, BucketName, Key},
                     server(dict:store(BucketName, NewBucket, Buckets))
             end;
@@ -76,7 +76,7 @@ cserver(Buckets, CachedBucketName, CachedBucket) ->
                     cserver(Buckets, BucketName, Bucket);
                 error ->
                     Store = dict:from_list({Key, Value}),
-                    NewBucket = bucket:new(BucketName, Store),
+                    NewBucket = cbucket:new(BucketName, Store),
                     Client ! {self(), stored, BucketName, Key},
                     cserver(dict:store(BucketName, NewBucket, Buckets),
                             CachedBucketName,
