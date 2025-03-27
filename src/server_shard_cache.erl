@@ -7,16 +7,23 @@ initialize() ->
 
 initialize_with(InitBuckets) ->
     Buckets = initialize_cbuckets(InitBuckets),
-    ServerPid = server(Buckets),
-    catch unregister(server_actor),
-    register(server_actor, ServerPid),
+    ServerPid = spawn_link(?MODULE, server, [Buckets]),
+    catch unregister(server),
+    register(server, ServerPid),
     ServerPid.
 
 initialize_cbuckets(InitBuckets) ->
     dict:fold(fun(BucketName, Bucket, AccIn) ->
-                 dict:store(BucketName, cbucket:new(BucketName, Bucket), AccIn)
+                 maps:put(BucketName,
+                          cbucket:new(BucketName,
+                                      dict:fold(fun(Key, Value, _AccIn) ->
+                                                   maps:put(Key, Value, _AccIn)
+                                                end,
+                                                maps:new(),
+                                                Bucket)),
+                          AccIn)
               end,
-              dict:new(),
+              maps:new(),
               InitBuckets).
 
 server(Buckets) ->
@@ -28,18 +35,18 @@ server(Buckets) ->
             Client ! {self(), disconnected},
             server(Buckets);
         {Client, store, BucketName, Key, Value} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, store, Key, Value},
                     cserver(Buckets, BucketName, Bucket);
                 error ->
-                    Store = dict:from_list({Key, Value}),
+                    Store = maps:from_list({Key, Value}),
                     NewBucket = cbucket:new(BucketName, Store),
                     Client ! {self(), stored, BucketName, Key},
-                    server(dict:store(BucketName, NewBucket, Buckets))
+                    server(maps:put(BucketName, NewBucket, Buckets))
             end;
         {Client, retrieve, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, retrieve, Key},
                     cserver(Buckets, BucketName, Bucket);
@@ -48,7 +55,7 @@ server(Buckets) ->
                     server(Buckets)
             end;
         {Client, delete, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, delete, Key},
                     cserver(Buckets, BucketName, Bucket);
@@ -70,15 +77,15 @@ cserver(Buckets, CachedBucketName, CachedBucket) ->
             CachedBucket ! {Client, store, Key, Value},
             cserver(Buckets, CachedBucketName, CachedBucket);
         {Client, store, BucketName, Key, Value} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, store, Key, Value},
                     cserver(Buckets, BucketName, Bucket);
                 error ->
-                    Store = dict:from_list({Key, Value}),
+                    Store = maps:from_list({Key, Value}),
                     NewBucket = cbucket:new(BucketName, Store),
                     Client ! {self(), stored, BucketName, Key},
-                    cserver(dict:store(BucketName, NewBucket, Buckets),
+                    cserver(maps:put(BucketName, NewBucket, Buckets),
                             CachedBucketName,
                             CachedBucket)
             end;
@@ -86,7 +93,7 @@ cserver(Buckets, CachedBucketName, CachedBucket) ->
             CachedBucket ! {Client, retrieve, Key},
             cserver(Buckets, CachedBucketName, CachedBucket);
         {Client, retrieve, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, retrieve, Key};
                 error ->
@@ -94,10 +101,12 @@ cserver(Buckets, CachedBucketName, CachedBucket) ->
             end,
             server(Buckets);
         {Client, delete, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
-                    Bucket ! {Client, delete, Key};
+                    Bucket ! {Client, delete, Key},
+                    cserver(Buckets, BucketName, Buckets);
                 error ->
-                    Client ! {self(), not_found, BucketName, Key}
+                    Client ! {self(), not_found, BucketName, Key},
+                    cserver(Buckets, CachedBucketName, CachedBucket)
             end
     end.

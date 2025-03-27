@@ -10,7 +10,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--export([initialize/0, initialize_with/1, server_actor/1, typical_session_1/1,
+-export([initialize/0, initialize_with/1, server/1, typical_session_1/1,
          typical_session_2/1]).
 
 %%
@@ -23,55 +23,65 @@ initialize() ->
 
 % Start server with an initial state.
 % Useful for benchmarking.
-initialize_with(Buckets) ->
-    ServerPid = spawn_link(?MODULE, server_actor, [Buckets]),
-    catch unregister(server_actor),
-    register(server_actor, ServerPid),
+initialize_with(InitBuckets) ->
+    Buckets =
+        dict:fold(fun(BucketName, Bucket, AccIn) ->
+                     maps:put(BucketName,
+                              dict:fold(fun(Key, Value, _AccIn) -> maps:put(Key, Value, _AccIn) end,
+                                        maps:new(),
+                                        Bucket),
+                              AccIn)
+                  end,
+                  maps:new(),
+                  InitBuckets),
+    ServerPid = spawn_link(?MODULE, server, [Buckets]),
+    catch unregister(server),
+    register(server, ServerPid),
     ServerPid.
 
 % The server actor works like a small database and encapsulates all state of
 % this simple implementation.
 %
 % Buckets is a dictionary of bucket names, to a dictionary of keys to values.
-server_actor(Buckets) ->
+server(Buckets) ->
     receive
         {Sender, connect} ->
             % This doesn't do anything, but you could use this operation if needed.
             Sender ! {self(), connected},
-            server_actor(Buckets);
+            server(Buckets);
         {Sender, disconnect} ->
             % This doesn't do anything, but you could use this operation if needed.
             Sender ! {self(), disconnected},
-            server_actor(Buckets);
+            server(Buckets);
         {Sender, create, BucketName} ->
             % If a bucket already exists, it is overwritten with an empty bucket.
             % This is probably not what you want, but we disregard this error for
             % this project.
-            NewBuckets = dict:store(BucketName, dict:new(), Buckets),
+            NewBuckets = maps:put(BucketName, maps:new(), Buckets),
             Sender ! {self(), created, BucketName},
-            server_actor(NewBuckets);
+            server(NewBuckets);
         {Sender, store, BucketName, Key, Value} ->
             % Existing keys are overwritten. This is the desired behavior.
             OldBucket = get_bucket(BucketName, Buckets),
-            NewBucket = dict:store(Key, Value, OldBucket),
-            NewBuckets = dict:store(BucketName, NewBucket, Buckets),
+            NewBucket = maps:put(Key, Value, OldBucket),
+            NewBuckets = maps:put(BucketName, NewBucket, Buckets),
             Sender ! {self(), stored, BucketName, Key},
-            server_actor(NewBuckets);
+            server(NewBuckets);
         {Sender, retrieve, BucketName, Key} ->
             Bucket = get_bucket(BucketName, Buckets),
-            case dict:find(Key, Bucket) of
+            case maps:find(Key, Bucket) of
                 {ok, Value} ->
                     Sender ! {self(), retrieved, BucketName, Key, Value};
                 error ->
                     Sender ! {self(), not_found, BucketName, Key}
             end,
-            server_actor(Buckets);
+            server(Buckets);
         {Sender, delete, BucketName, Key} ->
             OldBucket = get_bucket(BucketName, Buckets),
-            NewBucket = dict:erase(Key, OldBucket),
-            NewBuckets = dict:store(BucketName, NewBucket, Buckets),
+            NewBucket = maps:remove(Key, OldBucket),
+            NewBuckets = maps:put(BucketName, NewBucket, Buckets),
             Sender ! {self(), deleted, BucketName, Key},
-            server_actor(NewBuckets)
+            server(NewBuckets)
     end.
 
 %%
@@ -80,11 +90,11 @@ server_actor(Buckets) ->
 
 % Find a bucket in the dictionary. If it doesn't exist, returns an empty dictionary.
 get_bucket(BucketName, Buckets) ->
-    case dict:find(BucketName, Buckets) of
+    case maps:find(BucketName, Buckets) of
         {ok, Bucket} ->
             Bucket;
         error ->
-            dict:new()
+            maps:new()
     end.
 
 %%
@@ -95,7 +105,7 @@ get_bucket(BucketName, Buckets) ->
 
 % Test initialize function.
 initialize_test() ->
-    catch unregister(server_actor),
+    catch unregister(server),
     initialize().
 
 % Test connect function.
@@ -159,7 +169,7 @@ typical_session_test() ->
     end.
 
 typical_session_1(TesterPid) ->
-    {ServerPid, connected} = server:connect(server_actor),
+    {ServerPid, connected} = server:connect(server),
     {ServerPid, created, "shopping"} = server:create(ServerPid, "shopping"),
     {ServerPid, stored, "shopping", "milk"} = server:store(ServerPid, "shopping", "milk", 1),
     {ServerPid, stored, "shopping", "eggs"} = server:store(ServerPid, "shopping", "eggs", 3),
@@ -172,7 +182,7 @@ typical_session_1(TesterPid) ->
     TesterPid ! {self(), ok}.
 
 typical_session_2(TesterPid) ->
-    {ServerPid, connected} = server:connect(server_actor),
+    {ServerPid, connected} = server:connect(server),
     {ServerPid, created, "bucket"} = server:create(ServerPid, "bucket"),
     {ServerPid, stored, "bucket", "a"} = server:store(ServerPid, "bucket", "a", "1"),
     {ServerPid, retrieved, "bucket", "a", "1"} = server:retrieve(ServerPid, "bucket", "a"),

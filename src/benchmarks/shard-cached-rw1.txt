@@ -1,0 +1,6 @@
+Parameters:
+Number of buckets: 1000
+Number of keys per bucket: 100
+Number of keys total: 100000
+
+

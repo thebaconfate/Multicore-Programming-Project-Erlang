@@ -16,9 +16,16 @@ initialize_with(InitBuckets) ->
 
 initialize_buckets(InitBuckets) ->
     dict:fold(fun(BucketName, Store, AccIn) ->
-                 dict:store(BucketName, bucket:new(BucketName, Store), AccIn)
+                 maps:put(BucketName,
+                          cbucket:new(BucketName,
+                                      dict:fold(fun(Key, Value, _AccIn) ->
+                                                   maps:put(Key, Value, _AccIn)
+                                                end,
+                                                maps:new(),
+                                                Store)),
+                          AccIn)
               end,
-              dict:new(),
+              maps:new(),
               InitBuckets).
 
 server(Clients, Buckets) ->
@@ -31,7 +38,7 @@ server(Clients, Buckets) ->
                              end
                           end,
                           Clients),
-            NewBuckets = dict:store(ReplicaName, ReplicaBucket, Buckets),
+            NewBuckets = maps:put(ReplicaName, ReplicaBucket, Buckets),
             server(Clients, NewBuckets);
         {Sender, connect} ->
             NewClient = cworker:new(self(), Buckets),

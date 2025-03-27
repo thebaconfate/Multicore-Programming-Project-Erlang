@@ -2,8 +2,18 @@
 
 -export([new/2, worker/2]).
 
-new(ServerPid, Bucket) ->
-    spawn(?MODULE, worker, [ServerPid, Bucket]).
+new(ServerPid, Buckets) ->
+    if is_map(Buckets) ->
+           spawn(?MODULE, worker, [ServerPid, Buckets]);
+       true ->
+           io:format("Unknown datastructure for cworker buckets, assuming\n      "
+                     "               dict"),
+           MapsBuckets =
+               dict:fold(fun(Key, Value, AccIn) -> maps:put(Key, Value, AccIn) end,
+                         maps:new(),
+                         Buckets),
+           spawn(?MODULE, worker, [ServerPid, MapsBuckets])
+    end.
 
 worker(Server, Buckets) ->
     receive
@@ -11,26 +21,26 @@ worker(Server, Buckets) ->
             Server ! {self(), disconnect},
             Client ! {self(), disconnected};
         {_, replicate, ReplicaName, ReplicaBucket} ->
-            worker(Server, dict:store(ReplicaName, ReplicaBucket, Buckets));
+            worker(Server, maps:put(ReplicaName, ReplicaBucket, Buckets));
         {Client, create, BucketName} ->
-            Bucket = cbucket:new(BucketName, dict:new()),
+            Bucket = cbucket:new(BucketName, maps:new()),
             Server ! {self(), replicate, BucketName, Bucket},
             Client ! {self(), created, BucketName},
-            worker(Server, dict:store(BucketName, Bucket, Buckets));
+            worker(Server, maps:put(BucketName, Bucket, Buckets));
         {Client, store, BucketName, Key, Value} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, store, Key, Value},
                     cworker(Server, Buckets, BucketName, Bucket);
                 error ->
-                    Store = dict:from_list([{Key, Value}]),
+                    Store = maps:from_list([{Key, Value}]),
                     Bucket = cbucket:new(BucketName, Store),
                     Server ! {self(), replicate, BucketName, Bucket},
                     Client ! {self(), stored, BucketName, Key},
-                    worker(Server, Buckets)
+                    worker(Server, maps:put(BucketName, Bucket, Buckets))
             end;
         {Client, retrieve, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, retrieve, Key},
                     cworker(Server, Buckets, BucketName, Bucket);
@@ -39,7 +49,7 @@ worker(Server, Buckets) ->
                     worker(Server, Buckets)
             end;
         {Client, delete, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, delete, Key},
                     cworker(Server, Buckets, BucketName, Bucket);
@@ -55,33 +65,30 @@ cworker(Server, Buckets, CachedBucketName, CachedBucket) ->
             Server ! {self(), disconnect},
             Client ! {self(), disconnected};
         {_, replicate, ReplicaName, ReplicaBucket} ->
-            NewBuckets = dict:store(ReplicaName, ReplicaBucket, Buckets),
+            NewBuckets = maps:put(ReplicaName, ReplicaBucket, Buckets),
             cworker(Server, NewBuckets, CachedBucketName, CachedBucket);
         {Client, create, BucketName} ->
-            Bucket = cbucket:new(BucketName, dict:new()),
+            Bucket = cbucket:new(BucketName, maps:new()),
             Server ! {self(), replicate, BucketName, Bucket},
             Client ! {self(), created, BucketName},
-            cworker(Server,
-                    dict:store(BucketName, Bucket, Buckets),
-                    CachedBucketName,
-                    CachedBucket);
+            cworker(Server, maps:put(BucketName, Bucket, Buckets), CachedBucketName, CachedBucket);
         {Client, Operation, BucketName, Key, Value} when BucketName == CachedBucketName ->
             CachedBucket ! {Client, Operation, Key, Value},
             cworker(Server, Buckets, CachedBucketName, CachedBucket);
         {Client, store, BucketName, Key, Value} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, store, Key, Value},
                     cworker(Server, Buckets, BucketName, Bucket);
                 error ->
-                    Store = dict:from_list([{Key, Value}]),
+                    Store = maps:from_list([{Key, Value}]),
                     Bucket = cbucket:new(BucketName, Store),
                     Server ! {self(), replicate, BucketName, Bucket},
                     Client ! {self(), stored, BucketName, Key},
-                    cworker(Server, dict:store(Bucket, Buckets), CachedBucketName, CachedBucket)
+                    cworker(Server, maps:put(Bucket, Buckets), CachedBucketName, CachedBucket)
             end;
         {Client, retrieve, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, retrieve, Key},
                     cworker(Server, Buckets, BucketName, Bucket);
@@ -90,7 +97,7 @@ cworker(Server, Buckets, CachedBucketName, CachedBucket) ->
                     cworker(Server, Buckets, CachedBucketName, CachedBucket)
             end;
         {Client, delete, BucketName, Key} ->
-            case dict:find(BucketName, Buckets) of
+            case maps:find(BucketName, Buckets) of
                 {ok, Bucket} ->
                     Bucket ! {Client, delete, Key},
                     cworker(Server, Buckets, BucketName, Bucket);

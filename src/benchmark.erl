@@ -1,10 +1,10 @@
 -module(benchmark).
 
--export([test_centralized_readwrite/0, test_shard_cached_readwrite/0,
-         test_worker_shard_cached_readwrite/0, test_centralized_readonly/0,
-         test_shard_cached_readonly/0, test_worker_shard_cached_readonly/0,
-         test_centralized_mixedload/0, test_shard_cached_mixedload/0,
-         test_worker_shard_cached_mixedload/0]).
+-export([test_centralized_readwrite/0, test_sharded_cached_readwrite/0,
+         test_worker_sharded_cached_readwrite/0, test_centralized_readonly/0,
+         test_sharded_cached_readonly/0, test_worker_sharded_cached_readonly/0,
+         test_centralized_mixedload/0, test_sharded_cached_mixedload/0,
+         test_worker_sharded_cached_mixedload/0]).
 
 %% Benchmark helpers
 
@@ -31,12 +31,20 @@ run_benchmark(Name, Fun, Times) ->
                   end,
                   lists:seq(1, Times)).
 
+measure(Name, Fun, I) ->
+    io:format("Starting benchmark ~s: ~p~n", [Name, I]),
+    StartTime = os:timestamp(),
+    Fun(),
+    WallClockTime =
+        timer:now_diff(
+            os:timestamp(), StartTime),
+    io:format("Wall clock time = ~p ms~n", [WallClockTime / 1000.0]),
+    io:format("~s done~n", [Name]).
+
 % Run the function `Fun` and print the time it took.
 %
 % `Name` is the name of the benchmark, used to identify the benchmark in the results.
 % `I` is the index of the benchmark run, used to identify the run in the results.
-measure(Name, Fun, I) ->
-    io:format("Starting benchmark ~s: ~p~n", [Name, I]),
 
     % Start timers
     % Tips:
@@ -49,23 +57,20 @@ measure(Name, Fun, I) ->
     %   threads. Time spent in the operating system kernel (such as swapping and
     %   I/O) is not included. This leads to smaller variations but is
     %   misleading.
-    StartTime = os:timestamp(), % Wall clock time
+ % Wall clock time
+
     %statistics(runtime),       % CPU time, summed for all threads
     % Run
-    Fun(),
 
     % Get and print statistics
     % Recommendation [1]:
     % The granularity of both measurement types can be high. Therefore, ensure
     % that each individual measurement lasts for at least several seconds.
     % [1] http://erlang.org/doc/efficiency_guide/profiling.html
-    WallClockTime =
-        timer:now_diff(
-            os:timestamp(), StartTime),
+
     %{_, CpuTime} = statistics(runtime),
-    io:format("Wall clock time = ~p ms~n", [WallClockTime / 1000.0]),
+
     %io:format("CPU time = ~p ms~n", [CpuTime]),
-    io:format("~s done~n", [Name]).
 
 %% Benchmarks
 % Below are some example benchmarks. Extend these to test the best and worst
@@ -107,7 +112,12 @@ initialize_server(CreateServer) ->
                               lists:map(fun(Key) -> {Key, generate_value(Key)} end, Keys))}
                       end,
                       BucketNames)),
+    StartTime = os:timestamp(), % Wall clock time
     ServerPid = CreateServer(Buckets),
+    WallClockTime =
+        timer:now_diff(
+            os:timestamp(), StartTime),
+    io:format("Server initialization wall clock time = ~p ms~n", [WallClockTime / 1000.0]),
     {ServerPid, BucketNames, Keys}.
 
 % Pick a random element from a list.
@@ -131,7 +141,6 @@ generate_value(Key) ->
 % Hence, test will do 50% store and 50% retrieve operations.
 test_readwrite(CreateServer) ->
     {ServerPid, BucketNames, Keys} = initialize_server(CreateServer),
-    io:format("ServerPid: ~p~n", [ServerPid]),
     NumberOfClients = 100,
     NumberOfOperations = 1000,
     run_benchmark("readwrite",
@@ -169,11 +178,11 @@ test_readwrite(CreateServer) ->
 test_centralized_readwrite() ->
     test_readwrite(central()).
 
-test_shard_cached_readwrite() ->
-    test_readwrite(shard_cached()).
+test_sharded_cached_readwrite() ->
+    test_readwrite(sharded_cached()).
 
-test_worker_shard_cached_readwrite() ->
-    test_readwrite(worker_shard_cached()).
+test_worker_sharded_cached_readwrite() ->
+    test_readwrite(worker_sharded_cached()).
 
 % Test read-only operations.
 %
@@ -209,11 +218,11 @@ test_readonly(CreateServer) ->
 test_centralized_readonly() ->
     test_readonly(central()).
 
-test_shard_cached_readonly() ->
-    test_readonly(shard_cached()).
+test_sharded_cached_readonly() ->
+    test_readonly(sharded_cached()).
 
-test_worker_shard_cached_readonly() ->
-    test_readonly(worker_shard_cached()).
+test_worker_sharded_cached_readonly() ->
+    test_readonly(worker_sharded_cached()).
 
 % Test a load of 99% retrieve and 1% store operations.
 %
@@ -261,17 +270,17 @@ test_mixedload(CreateServer) ->
 test_centralized_mixedload() ->
     test_mixedload(central()).
 
-test_shard_cached_mixedload() ->
-    test_mixedload(shard_cached()).
+test_sharded_cached_mixedload() ->
+    test_mixedload(sharded_cached()).
 
-test_worker_shard_cached_mixedload() ->
-    test_mixedload(worker_shard_cached()).
+test_worker_sharded_cached_mixedload() ->
+    test_mixedload(worker_sharded_cached()).
 
 central() ->
     fun(Buckets) -> server_centralized:initialize_with(Buckets) end.
 
-worker_shard_cached() ->
+worker_sharded_cached() ->
     fun(Buckets) -> server_worker_shard_cache:initialize_with(Buckets) end.
 
-shard_cached() ->
+sharded_cached() ->
     fun(Buckets) -> server_shard_cache:initialize_with(Buckets) end.
