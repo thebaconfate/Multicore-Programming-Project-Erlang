@@ -16,6 +16,8 @@ omen_dict_dir = Path("./benchmarks-omen-dict/")
 omen_maps_dir = Path("./benchmarks-omen-maps/")
 firefly1_dir = Path("./benchmarks-firefly1/")
 
+data_file = Path("measurements.csv")
+
 
 implementations = ["central", "shard", "worker"]
 scenarios = ["read-only", "read-write", "mixed-load"]
@@ -88,6 +90,10 @@ def parse_file(filename: str) -> tuple[list[float], list[str], float]:
     return (results, parameters, server_time)
 
 
+def title_to_filename(title: str):
+    return title.replace(" ", "-").replace(":", "").replace(",", "").lower()
+
+
 def plot_boxplots(
     speedups: dict[int, list[Union[int, float]]], title: str, xlabel: str, ylabel: str
 ):
@@ -114,35 +120,51 @@ def plot_boxplots(
         [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
     )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
-    path = Path("report/images/boxplots")
+    path = Path("report/images/boxplots/")
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
-    fig.savefig(
-        f"{path.as_posix()}/boxplot-{
-            title.replace(' ', '-').replace(':', '').replace(',', '').lower()
-        }.pdf"
-    )
+    fig.savefig(f"{path.as_posix()}/boxplot-{title_to_filename(title)}.pdf")
+    plt.close()
 
 
-def plot_speedup_violinplots(speedups: dict[int, list[float]]):
-    """Plot the speedups as violin plots (alternative)."""
+def plot_violinplots(
+    speedups: dict[int, list[float]], title: str, xlabel: str, ylabel: str
+):
+    """Plot the speedups as violin plots (alternative).
+    Example:
+    Title = Speedup of readonly
+    xlabel = number of threads
+    ylabel = Speedup
+    """
+
     mpl.rcParams.update({"font.size": 16})
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.violinplot([speedups[i] for i in speedups], showmedians=True)
     # See https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.violinplot.html
-    ax.set_title(f"Speedup of {BENCHMARK_NAME}")
-    ax.set_xlabel("Number of threads")
-    ax.set_ylabel("Speedup")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.set_xticks(list(speedups.keys()))
     ax.set_xticklabels(
         [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
     )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
-    fig.savefig(f"speedup-{BENCHMARK_NAME}-violinplot.pdf")
+    path = Path("report/images/violinplots/")
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+    fig.savefig(f"{path.as_posix()}/{title_to_filename(title)}-violinplot.pdf")
+    plt.close()
 
 
-def plot_speedup_errorbars(speedups: dict[int, list[float]]):
-    """Plot the speedups as plot with error bars."""
+def plot_errorbars(
+    speedups: dict[int, list[float]], title: str, xlabel: str, ylabel: str
+):
+    """Plot the speedups as plot with error bars.
+    Example:
+    Title = Speedup of readonly
+    xlabel = number of threads
+    ylabel = Speedup
+    """
     mpl.rcParams.update({"font.size": 16})
     fig, ax = plt.subplots(figsize=(10, 5))
     x = list(speedups.keys())
@@ -155,13 +177,17 @@ def plot_speedup_errorbars(speedups: dict[int, list[float]]):
     ]
     ax.errorbar(x, y=medians, yerr=[errors_down, errors_up])
     # See https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.violinplot.html
-    ax.set_title(f"Speedup of {BENCHMARK_NAME}")
-    ax.set_xlabel("Number of threads")
-    ax.set_ylabel("Speedup")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.set_xticks(x)
     ax.set_xticklabels([str(k) if k % 4 == 0 or k == 1 else "" for k in x])
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
-    fig.savefig(f"speedup-{BENCHMARK_NAME}-errorbars.pdf")
+    path = Path("report/images/errorbars/")
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+    fig.savefig(f"{path.as_posix()}/{title_to_filename(title)}-errorbars.pdf")
+    plt.close()
 
 
 def parse_files(fileNames: Generator[Path, None, None], path: Path):
@@ -372,20 +398,11 @@ def calc_throughput(orig: pl.LazyFrame):
     pass
 
 
-def process_results():
-    data = read_csv("measurements.csv")
-    data = (
-        data.filter(pl.col("storage") == "maps")
-        .with_columns(
-            pl.col("scenario")
-            .str.replace("rw", "gd")
-            .str.replace("r", "read-only")
-            .str.replace("gd", "read-write")
-            .str.replace("mix", "mixed-load")
-            .alias("scenario")
-        )
-        .cache()
-    )
+def make_speedup_plots(origin: pl.LazyFrame | None = None):
+    data = origin
+    if data is None:
+        data = read_csv(data_file.name)
+    data = data.filter(pl.col("storage") == "maps").cache()
     combinations = list(itertools.product(implementations, scenarios))
     lfs = [
         data.filter(
@@ -405,16 +422,16 @@ def process_results():
         threads_col = lf.get_column("scheduler_threads")
         speedups_col = lf.get_column("speedup")
         plot_data = {threads_col[i]: speedups_col[i] for i in range(len(threads_col))}
-        plot_boxplots(
-            plot_data,
-            title=f"Speedup of scenario: {scenario}, implementation: {implementation}",
-            xlabel="Number of threads",
-            ylabel="Speedup",
-        )
+        title = f"Speedup of scenario: {scenario}, implementation: {implementation}"
+        xlabel = "Number of threads"
+        ylabel = "Speedup"
+        plot_boxplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
+        plot_violinplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
+        plot_errorbars(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
 
 
 def main():
-    process_results()
+    make_speedup_plots()
 
 
 if __name__ == "__main__":
