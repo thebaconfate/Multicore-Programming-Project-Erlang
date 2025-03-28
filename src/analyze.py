@@ -1,10 +1,13 @@
 import functools
+import itertools
+from ntpath import exists
 from pathlib import Path
 import os
 import logging
 import re
+from sys import implementation
 import polars as pl
-from typing import Dict, Generator, Set
+from typing import Dict, Generator, Set, Union
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -14,12 +17,9 @@ omen_maps_dir = Path("./benchmarks-omen-maps/")
 firefly1_dir = Path("./benchmarks-firefly1/")
 
 
-# Name of the benchmark. File names should be be result-$NAME-$NUMBER.txt.
-BENCHMARK_NAME = "mixedload"
-# Number of benchmark files, e.g. result-fib-1.txt to result-fib-64.txt.
-NUMBER_OF_FILES = 64
-# Number of iterations per benchmark, i.e. number of results in one file.
-NUMBER_OF_ITERATIONS = 30
+implementations = ["central", "shard", "worker"]
+scenarios = ["read-only", "read-write", "mixed-load"]
+BENCHMARK_NAME = "ree"
 
 
 # Set log level.
@@ -88,17 +88,15 @@ def parse_file(filename: str) -> tuple[list[float], list[str], float]:
     return (results, parameters, server_time)
 
 
-def calculate_speedups(results: dict[int, list[float]]) -> dict[int, list[float]]:
-    """Calculate the speedups for all results.
-
-    The base time is the median of the results for 1 thread."""
-    base = np.median(results[1])
-    speedups = {i: [base / t for t in result] for (i, result) in results.items()}
-    return speedups
-
-
-def plot_speedup_boxplots(speedups: dict[int, list[float]]):
-    """Plot the speedups as boxplots."""
+def plot_boxplots(
+    speedups: dict[int, list[Union[int, float]]], title: str, xlabel: str, ylabel: str
+):
+    """Plot the speedups as boxplots.
+    Example:
+    Title = Speedup of readonly
+    xlabel = number of threads
+    ylabel = Speedup
+    """
     mpl.rcParams.update({"font.size": 16})
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.boxplot([speedups[i] for i in speedups], notch=True, bootstrap=1000)
@@ -108,13 +106,22 @@ def plot_speedup_boxplots(speedups: dict[int, list[float]]):
     # Points outside the whiskers are plotted as outliers (individual circles).
     # Different styles exist.
     # See https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.boxplot.html
-    ax.set_title(f"Speedup of {BENCHMARK_NAME}")
-    ax.set_xlabel("Number of threads")
-    ax.set_ylabel("Speedup")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.set_xticks(list(speedups.keys()))
-    ax.set_xticklabels([k if k % 4 == 0 or k == 1 else "" for k in speedups.keys()])
+    ax.set_xticklabels(
+        [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
+    )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
-    fig.savefig(f"speedup-{BENCHMARK_NAME}-boxplot.pdf")
+    path = Path("report/images/boxplots")
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+    fig.savefig(
+        f"{path.as_posix()}/boxplot-{
+            title.replace(' ', '-').replace(':', '').replace(',', '').lower()
+        }.pdf"
+    )
 
 
 def plot_speedup_violinplots(speedups: dict[int, list[float]]):
@@ -127,7 +134,9 @@ def plot_speedup_violinplots(speedups: dict[int, list[float]]):
     ax.set_xlabel("Number of threads")
     ax.set_ylabel("Speedup")
     ax.set_xticks(list(speedups.keys()))
-    ax.set_xticklabels([k if k % 4 == 0 or k == 1 else "" for k in speedups.keys()])
+    ax.set_xticklabels(
+        [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
+    )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
     fig.savefig(f"speedup-{BENCHMARK_NAME}-violinplot.pdf")
 
@@ -150,7 +159,7 @@ def plot_speedup_errorbars(speedups: dict[int, list[float]]):
     ax.set_xlabel("Number of threads")
     ax.set_ylabel("Speedup")
     ax.set_xticks(x)
-    ax.set_xticklabels([k if k % 4 == 0 or k == 1 else "" for k in x])
+    ax.set_xticklabels([str(k) if k % 4 == 0 or k == 1 else "" for k in x])
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
     fig.savefig(f"speedup-{BENCHMARK_NAME}-errorbars.pdf")
 
@@ -159,9 +168,22 @@ def parse_files(fileNames: Generator[Path, None, None], path: Path):
     read_write_regex = r"-rw(\d+)\.txt"
     read_regex = r"-r(\d+)\.txt"
     mix_regex = r"-mix(\d+)\.txt"
-    params: Dict[str, Dict[str, Set[str]]] = {"r": {}, "rw": {}, "mix": {}}
-    results = {"r": {}, "rw": {}, "mix": {}}
-    server_time = {"r": {}, "rw": {}, "mix": {}}
+    params: Dict[str, Dict[str, Set[str]]] = {
+        "read-only": {},
+        "read-write": {},
+        "mixed-load": {},
+    }
+    results = {
+        "read-only": {},
+        "read-write": {},
+        "mixed-load": {},
+    }
+
+    server_time = {
+        "read-only": {},
+        "read-write": {},
+        "mixed-load": {},
+    }
     for file in fileNames:
         rw = re.search(read_write_regex, file.name)
         r = re.search(read_regex, file.name)
@@ -169,13 +191,13 @@ def parse_files(fileNames: Generator[Path, None, None], path: Path):
         if not rw and not r and not mix:
             raise Exception("Unknown type of test")
         if rw:
-            key = "rw"
+            key = "read-write"
             i = int(rw.group(1))
         elif r:
-            key = "r"
+            key = "read-only"
             i = int(r.group(1))
         elif mix:
-            key = "mix"
+            key = "mixed-load"
             i = int(mix.group(1))
         subkey = file.name.split("-")[0]
         if subkey not in results[key]:
@@ -251,9 +273,148 @@ def read_csv(filename: str):
     return pl.scan_csv(filename)
 
 
+def compare_storage(lf_origin: pl.LazyFrame):
+    # conclusion:
+    # maps tend to be better under most circumstances. However on 22 instances
+    # of the 576 dict was better. All but one were with the worker
+    # implementation. On the 22 instances the maps implementation ranged from
+    # 0.04 to 21% slower with only two instances being more than 4%.
+    # On average maps was 10% faster across all implementations, scenarios and
+    # threads
+    """
+    lf = (
+        lf_origin.filter(pl.col("device") == "omen")
+        .group_by(
+            [pl.col("storage", "implementation", "scenario", "scheduler_threads")]
+        )
+        .agg(pl.col("elapsed_time(ms)").mean())
+    ).cache()
+
+    """
+
+    lf_independant = (
+        lf_origin.filter(pl.col("device") == "omen")
+        .group_by(pl.col("storage"))
+        .agg(pl.col("elapsed_time(ms)").mean())
+    )
+
+    lf_in_dict = lf_independant.filter(pl.col("storage") == "dict").select(
+        pl.col("elapsed_time(ms)").alias("dict_time")
+    )
+    lf_in_maps = lf_independant.filter(pl.col("storage") == "maps").select(
+        pl.col("elapsed_time(ms)").alias("maps_time")
+    )
+
+    lf_in_compare = pl.concat([lf_in_maps, lf_in_dict], how="horizontal").with_columns(
+        ((pl.col("dict_time") - pl.col("maps_time")) / pl.col("dict_time") * 100).alias(
+            "diff(%)"
+        )
+    )
+    print(lf_in_compare.collect())
+
+    """
+    lf_dict = lf.filter(pl.col("storage") == "dict").select(
+        [
+            "implementation",
+            "scenario",
+            "scheduler_threads",
+            pl.col("elapsed_time(ms)").alias("dict_time"),
+        ]
+    )
+    lf_maps = lf.filter(pl.col("storage") == "maps").select(
+        [
+            "implementation",
+            "scenario",
+            "scheduler_threads",
+            pl.col("elapsed_time(ms)").alias("maps_time"),
+        ]
+    )
+
+    compare = (
+        lf_maps.join(
+            lf_dict, on=["implementation", "scenario", "scheduler_threads"], how="inner"
+        )
+        .with_columns(
+            (
+                (pl.col("dict_time") - pl.col("maps_time")) / pl.col("dict_time") * 100
+            ).alias("diff(%)")
+        )
+        .sort(pl.last(), descending=True)
+    )
+
+    """
+
+    # print(compare.collect())
+    # print(compare.collect().count())
+
+    """
+
+    negatives = compare.filter(pl.col("diff(%)") < 0).sort(
+        [pl.col("diff(%)")], descending=True
+    )
+    print(negatives.collect().to_pandas().to_string())
+    """
+    return
+
+
+def calc_speedup(orig: pl.LazyFrame):
+    base = (
+        orig.filter(pl.col("scheduler_threads").eq(1))
+        .select("elapsed_time(ms)")
+        .median()
+        .collect()
+        .get_column("elapsed_time(ms)")[0]
+    )
+    return orig.with_columns((base / pl.col("elapsed_time(ms)")).alias("speedup"))
+
+
+def calc_throughput(orig: pl.LazyFrame):
+    pass
+
+
+def process_results():
+    data = read_csv("measurements.csv")
+    data = (
+        data.filter(pl.col("storage") == "maps")
+        .with_columns(
+            pl.col("scenario")
+            .str.replace("rw", "gd")
+            .str.replace("r", "read-only")
+            .str.replace("gd", "read-write")
+            .str.replace("mix", "mixed-load")
+            .alias("scenario")
+        )
+        .cache()
+    )
+    combinations = list(itertools.product(implementations, scenarios))
+    lfs = [
+        data.filter(
+            (
+                (pl.col("implementation") == implementation)
+                & (pl.col("scenario") == scenario)
+            )
+        )
+        for (implementation, scenario) in combinations
+    ]
+    speedups = [calc_speedup(lf).sort(pl.col("scheduler_threads")) for lf in lfs]
+    for s in speedups:
+        tmp = s.select(["implementation", "scenario"]).unique().collect()
+        implementation = tmp.get_column("implementation")[0]
+        scenario = tmp.get_column("scenario")[0]
+        lf = s.group_by(pl.col("scheduler_threads")).agg(pl.col("speedup")).collect()
+        threads_col = lf.get_column("scheduler_threads")
+        speedups_col = lf.get_column("speedup")
+        plot_data = {threads_col[i]: speedups_col[i] for i in range(len(threads_col))}
+        plot_boxplots(
+            plot_data,
+            title=f"Speedup of scenario: {scenario}, implementation: {implementation}",
+            xlabel="Number of threads",
+            ylabel="Speedup",
+        )
+
+
 def main():
-    lf = read_csv("measurements.csv")
-    print(lf.head().collect())
+    process_results()
 
 
 if __name__ == "__main__":
