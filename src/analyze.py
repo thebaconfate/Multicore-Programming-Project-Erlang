@@ -7,10 +7,11 @@ import logging
 import re
 from sys import implementation
 import polars as pl
-from typing import Dict, Generator, Set, Union
+from typing import Dict, Generator, Set, Tuple, Union
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from polars.lazyframe import LazyFrame
 
 omen_dict_dir = Path("./benchmarks-omen-dict/")
 omen_maps_dir = Path("./benchmarks-omen-maps/")
@@ -19,7 +20,7 @@ firefly1_dir = Path("./benchmarks-firefly1/")
 data_file = Path("measurements.csv")
 
 
-implementations = ["central", "shard", "worker"]
+implementations = ["central", "sharded", "worker"]
 scenarios = ["read-only", "read-write", "mixed-load"]
 BENCHMARK_NAME = "ree"
 
@@ -56,7 +57,13 @@ def parse_file(filename: str) -> tuple[list[float], list[str], float]:
         raise Exception(
             f"Unexpected server initialization line ({filename}, line: {parameters_end_at_line + 1})"
         )
+    parameters_end_at_line += 2
     server_time = float(mInit.group(1))
+    for i in range(parameters_end_at_line, len(lines)):
+        if lines[i] == "\n":
+            parameters_end_at_line = i
+            break
+        parameters.append(lines[i])
 
     # Parse results.
     # Each result consists of three lines:
@@ -67,7 +74,7 @@ def parse_file(filename: str) -> tuple[list[float], list[str], float]:
     line1 = r"Wall clock time = ([\d\.]+) ms\n"
     line2 = r"(\w+) done\n"
     results = []
-    for i in range(parameters_end_at_line + 2, len(lines), 3):
+    for i in range(parameters_end_at_line + 1, len(lines), 3):
         # Parse lines
         m0 = re.match(line0, lines[i])
         m1 = re.match(line1, lines[i + 1])
@@ -233,25 +240,33 @@ def parse_files(fileNames: Generator[Path, None, None], path: Path):
         results[key][subkey][i], tmp_params, server_time[key][subkey][i] = parse_file(
             os.path.join(path, file.name)
         )
+        # Delete this
         params[key][subkey] = params[key][subkey] | set(tmp_params)
-        if len(params[key][subkey]) > 3:
+        if len(params[key][subkey]) > 6:
+            print(params[key][subkey])
             raise Exception(f"Inconsistent params for test: {key} index: {i}")
-    return (results, server_time)
-
-
-def parse_dirs(dirs: list[Path]):
-    measurements = {}
-    server = {}
-    for dir in dirs:
-        measurements[dir.name], server[dir.name] = parse_files(dir.iterdir(), dir)
-    return (measurements, server)
+    return (results, params, server_time)
 
 
 Measurements = Dict[str, Dict[str, Dict[str, Dict[int, list[float]]]]]
 Server = Dict[str, Dict[str, Dict[str, Dict[int, float]]]]
+Params = Dict[str, Dict[str, Dict[str, Set[str]]]]
 
 
-def measurements_to_lf(measurements: Measurements):
+def parse_dirs(
+    dirs: list[Path], new: bool = True
+) -> Tuple[Measurements, Params, Server]:
+    measurements = {}
+    server = {}
+    params = {}
+    for dir in dirs:
+        measurements[dir.name], params[dir.name], server[dir.name] = parse_files(
+            dir.iterdir(), dir
+        )
+    return (measurements, params, server)
+
+
+def measurements_to_lf(measurements: Measurements, params: Params):
     frames = []
     for directory, scenarios in measurements.items():
         dirsplit = directory.split("-")
@@ -261,6 +276,14 @@ def measurements_to_lf(measurements: Measurements):
             for implementation, benchmarks in implementations.items():
                 for threads, _measurements in benchmarks.items():
                     for index, measurement in enumerate(_measurements):
+                        list_of_params = [
+                            i.split(": ")
+                            for i in params[directory][scenario][implementation]
+                        ]
+                        dict_of_params = {
+                            " ".join(i[0].split(" ")[2:]).lower(): int(i[1])
+                            for i in list_of_params
+                        }
                         row = {
                             "device": device,
                             "storage": storage,
@@ -269,7 +292,7 @@ def measurements_to_lf(measurements: Measurements):
                             "scheduler_threads": threads,
                             "experiment": index + 1,
                             "elapsed_time(ms)": measurement,
-                        }
+                        } | dict_of_params
                         frames.append(row)
     return pl.DataFrame(frames).lazy()
 
@@ -293,10 +316,6 @@ def server_measurements_to_lf(server: Server):
                     }
                     frames.append(row)
     return pl.DataFrame(frames).lazy()
-
-
-def read_csv(filename: str):
-    return pl.scan_csv(filename)
 
 
 def compare_storage(lf_origin: pl.LazyFrame):
@@ -394,16 +413,9 @@ def calc_speedup(orig: pl.LazyFrame):
     return orig.with_columns((base / pl.col("elapsed_time(ms)")).alias("speedup"))
 
 
-def calc_throughput(orig: pl.LazyFrame):
-    pass
-
-
-def make_speedup_plots(origin: pl.LazyFrame | None = None):
-    data = origin
-    if data is None:
-        data = read_csv(data_file.name)
-    data = data.filter(pl.col("storage") == "maps").cache()
-    combinations = list(itertools.product(implementations, scenarios))
+def make_speedup_plots(origin: pl.LazyFrame = pl.scan_csv(data_file.name)):
+    data = origin.filter(pl.col("storage") == "maps").cache()
+    combinations = itertools.product(implementations, scenarios)
     lfs = [
         data.filter(
             (
@@ -430,8 +442,85 @@ def make_speedup_plots(origin: pl.LazyFrame | None = None):
         plot_errorbars(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
 
 
+def calc_throughput(orig: pl.LazyFrame) -> pl.LazyFrame:
+    return orig.with_columns(
+        (
+            (pl.col("operations per client") * pl.col("clients"))
+            / (pl.col("elapsed_time(ms)") / 1000)
+        ).alias("throughput(s)")
+    )
+
+
+def make_throughput_plots(
+    orig_lf: pl.LazyFrame = calc_throughput(pl.scan_csv(data_file.name)),
+):
+    orig_lf.cache()
+    combinations = list(itertools.product(implementations, scenarios))
+    lfs = [
+        orig_lf.filter(
+            (
+                (pl.col("implementation") == implementation)
+                & (pl.col("scenario") == scenario)
+            )
+        )
+        for (implementation, scenario) in combinations
+    ]
+    print(orig_lf.collect_schema().names())
+    for lf in lfs:
+        tmp = lf.select(["implementation", "scenario"]).unique().collect()
+        implementation = tmp.get_column("implementation")[0]
+        scenario = tmp.get_column("scenario")[0]
+        df = (
+            lf.group_by(pl.col("scheduler_threads"))
+            .agg(pl.col("throughput(s)"))
+            .collect()
+        )
+        threads_col = df.get_column("scheduler_threads")
+        throughput_col = df.get_column("throughput(s)")
+        plot_data = {threads_col[i]: throughput_col[i] for i in range(len(threads_col))}
+        title = f"Throughput per second of scenario: {scenario}, implementation: {implementation}"
+        xlabel = "Number of threads"
+        ylabel = "Throughput"
+        plot_boxplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
+        plot_violinplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
+        plot_errorbars(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
+
+
 def main():
-    make_speedup_plots()
+    old_lf = (
+        pl.scan_csv("old_measurements.csv")
+        .filter(pl.col("storage") == "dict")
+        .with_columns(
+            [
+                pl.when(pl.col("scenario") == "mix")
+                .then(pl.lit("mixed-load"))
+                .when(pl.col("scenario") == "r")
+                .then(pl.lit("read-only"))
+                .when(pl.col("scenario") == "rw")
+                .then(pl.lit("read-write"))
+                .otherwise(pl.col("scenario"))
+                .alias("scenario"),
+                pl.when(pl.col("implementation") == "work")
+                .then(pl.lit("worker"))
+                .when(pl.col("implementation") == "shard")
+                .then(pl.lit("sharded"))
+                .otherwise(pl.col("implementation"))
+                .alias("implementation"),
+                pl.when(pl.col("scenario") == "rw")
+                .then(pl.lit(2000).cast(pl.Int64))
+                .otherwise(pl.lit(1000).cast(pl.Int64))
+                .alias("operations per client"),
+                pl.lit(1000).cast(pl.Int64).alias("buckets"),
+                pl.lit(100).cast(pl.Int64).alias("clients"),
+                pl.lit(100).cast(pl.Int64).alias("keys per bucket"),
+                pl.lit(1000 * 100).cast(pl.Int64).alias("keys total"),
+            ]
+        )
+    )
+    lf = pl.scan_csv(data_file.name)
+    old_lf = old_lf.select(lf.collect_schema().names())
+    merged = pl.concat([old_lf, lf])
+    merged.collect().lazy().sink_csv(data_file.name)
 
 
 if __name__ == "__main__":

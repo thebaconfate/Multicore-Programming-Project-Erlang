@@ -143,6 +143,9 @@ test_readwrite(CreateServer) ->
     {ServerPid, BucketNames, Keys} = initialize_server(CreateServer),
     NumberOfClients = 100,
     NumberOfOperations = 1000,
+    io:format("Number of clients: ~p~n", [NumberOfClients]),
+    io:format("Number of operations per client: ~p~n", [2 * NumberOfOperations]),
+    io:format("~n"),
     run_benchmark("readwrite",
                   fun() ->
                      BenchmarkPid = self(),
@@ -191,6 +194,9 @@ test_readonly(CreateServer) ->
     {ServerPid, BucketNames, Keys} = initialize_server(CreateServer),
     NumberOfClients = 100,
     NumberOfOperations = 1000,
+    io:format("Number of clients: ~p~n", [NumberOfClients]),
+    io:format("Number of operations per client: ~p~n", [NumberOfOperations]),
+    io:format("~n"),
     run_benchmark("readonly",
                   fun() ->
                      BenchmarkPid = self(),
@@ -233,6 +239,10 @@ test_mixedload(CreateServer) ->
     NumberOfClients = 100,
     NumberOfWriteOperations = 10,
     NumberOfReadOperations = 990,
+    io:format("Number of clients: ~p~n", [NumberOfClients]),
+    io:format("Number of operations per client: ~p~n",
+              [NumberOfReadOperations + NumberOfWriteOperations]),
+    io:format("~n"),
     run_benchmark("mixedload",
                   fun() ->
                      BenchmarkPid = self(),
