@@ -3,9 +3,8 @@ from pathlib import Path
 import os
 import logging
 import re
-from numpy.typing import NDArray
 import polars as pl
-from typing import Dict, Generator, List, Set, Tuple, Union
+from typing import Dict, Generator, Set, Tuple, Union
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -485,19 +484,19 @@ def compare_throughput(orig_lf: pl.LazyFrame, scheduler_threads: int):
         .agg(pl.col("throughput(s)"))
     )
     lfs = lf_combinations(orig_lf)
-    plot_data: Dict[str, List[float]] = {}
+    plot_data = {}
     for lf in lfs:
         df = lf.collect()
         implementation = df.get_column("implementation")[0]
         scenario = df.get_column("scenario")[0]
         throughput = df.get_column("throughput(s)")
-        key = str(implementation) + ": " + str(scenario)
-        plot_data[key] = throughput.to_list()[0]
-    title = f"Throughput in operations per second for {scheduler_threads} " + "threads"
+        plot_data[str(implementation) + ": " + str(scenario)] = throughput.to_numpy()
+    title = f"Throughput/s {implementation}: {scenario}"
     xlabel = "implementation: scenario"
-    ylabel = "Million operations per second"
+    ylabel = "Throughput"
     mpl.rcParams.update({"font.size": 16})
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 5))
+    print(list(plot_data.values()))
     ax.boxplot(list(plot_data.values()), notch=True, bootstrap=1000)
     # Note: the 'notch' represents the confidence interval, calculated using
     # bootstrapping, a statistical technique that resamples the data.
@@ -508,13 +507,11 @@ def compare_throughput(orig_lf: pl.LazyFrame, scheduler_threads: int):
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_xticks(range(0, len(plot_data.keys()) + 1))
-    ax.set_xticklabels([""] + list(plot_data.keys()), rotation=80)
+    ax.set_xticks(list(plot_data.keys()))
     ax.set_ylim(0, 1.1 * max([max(v) for v in plot_data.values()]))
     path = Path("report/images/boxplots/")
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
-    plt.subplots_adjust(bottom=0.4)
     fig.savefig(f"{path.as_posix()}/boxplot-{title_to_filename(title)}.pdf")
     plt.close()
 

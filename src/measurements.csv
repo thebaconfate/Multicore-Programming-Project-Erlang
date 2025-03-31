@@ -26892,8 +26892,8 @@ omen,maps,read-write,worker,1,10,1501.0,2000,1000,100,100,100000
 omen,maps,read-write,worker,1,11,1520.0,2000,1000,100,100,100000
 omen,maps,read-write,worker,1,12,1506.0,2000,1000,100,100,100000
 omen,maps,read-write,worker,1,13,1506.0,2000,1000,100,100,100000
-omen,maps,read-write,worker,1,14,1.5,2000,1000,100,100,100000
-omen,maps,read-write,worker,1,15,1.5,2000,1000,100,100,100000
+omen,maps,read-write,worker,1,14,1500.0,2000,1000,100,100,100000
+omen,maps,read-write,worker,1,15,1500.0,2000,1000,100,100,100000
 omen,maps,read-write,worker,1,16,1502.0,2000,1000,100,100,100000
 omen,maps,read-write,worker,1,17,1497.0,2000,1000,100,100,100000
 omen,maps,read-write,worker,1,18,1512.0,2000,1000,100,100,100000
