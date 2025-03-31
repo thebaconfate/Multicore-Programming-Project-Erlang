@@ -146,6 +146,7 @@ the bucket behind a load balancer.
 \newpage
 \section{Evaluation}
 \subsection{Experimental set-up}
+\label{sec:experimental-set-up}
 For the experiments I used two devices. Firstly the Firefly machine of the VUB
 and my own laptop henceforth called "Omen" to set up the experiments for Firefly
 as well as make the necessary scripts and programs to run the experiments on
@@ -184,7 +185,7 @@ elapsed for performing these operations was measured and thus the buckets were
 already existing prior to starting the benchmark. \par
 Each experiment has 100 clients performing operations on the system. Each client
 will do 1000 operations per scenario and 2000 operations in the read-write
-scenario. There will always be 1000 buckets, each holding 100 keys
+scenario. There will always be 1000 buckets, each holding 100 keys.
 \subsection{Experimental methodology}
 To measure the time elapsed we used the wall clock time on the client side and we performed the
 experiment 64 times per scenario and per implementation on the Omen device, once
@@ -195,6 +196,64 @@ more threads.
 For the first experiment we will be comparing the throughput of the different
 implementations on the maximum amount of scheduler threads (12 for Omen and 128
 for Firefly).
-\section{Insight}
+\subsubsection{Throughput per second depending on the implementation and
+	scenario}
+For this experiment we use the parameters mentioned in
+\autoref{sec:experimental-set-up}. For each device we use the measurements for
+the maximum amount of threads, so in Omen's case its 12 and for Firefly its 128.
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{boxplots/boxplot-throughput-in-operations-per-second-for-12-threads.pdf}
+	\caption{Comparing throughput of implementations on Omen}
+	\label{fig:throughput-compare-impl-omen}
+\end{figure}
+On Omen we can clearly see an improving trend in terms of the throughput when
+improving the implementations, however the returns seem to be diminishing. The
+difference between the central implementation and the sharded implementation is
+clear. The sharded implementation is a clear imrovement. Comparing the sharded
+and the worker implementation might require you to squint your eyes a little as
+the there is not always an improvement. Most of the the time there is an
+improvement but in some cases outliers perform worse than the sharded
+implementation. In the case of read only operations the throughput even overlaps
+with the sharded implementation.
 
+% On firefly
+
+\subsection{Throughput per second depending on scheduler threads}
+For this experiment we use the same parameters mentioned in
+\autoref{sec:experimental-set-up} but set the scenario to read-write, as it
+provides the results of a balanced mix of operations and requires more
+operations to complete. We will also only look at the worker implementation as
+it seems to have the most potential for the highest throughput. In this experiment we measure the throughput of
+operations depending on the amount of scheduler threads. For Omen, we will look
+at 1-12 threads and for firefly 1-128.
+\section{Insight}
+\subsection{Lightweight processes and its impact}
+The lightweight-ness of the processes has definately influenced my solution,
+because in other languages they have a hefty additional cost to create. This
+means that there is usually an optimal amount of processes you can have before
+your speedup starts to actually decrease. In Erlang however, the
+worker implementation can scale to 100 users and 100 buckets, having 201
+processes in total without any issues and still packs a punch. Consequently
+I don't restrain myself as much as in the other languages in terms of the amount of processes created.
+If the processes did cost much higher, I would probably be looking for an
+optimal amount of processes to have to reach the optimal performance and base my
+implementation on that instead of going nuts with the amount of processes.
+\subsection{Distribution of cores over multiple machines}
+If the application would be distributed over multiple machines, the achitecture
+or the worker implementation would still be viable, but on a larger scale. This
+means that perhaps it would be better to give each process or each X amount of
+processes a machine. Since my implementation now primarily focusses on
+processing the most amount of requests in the least amount of time, I would
+probably shift my focus to avoiding network requests since these are responsible
+for most of the
+latency in operations. I would probaby be looking to keep a cache of the Bucket
+as close to the user as possible, Maybe even the bucket and the worker process
+as close together as possible, so I would probably be looking at minimizing physical
+distances as well. Some other techniques might be to replicate the buckets and have a
+load balancer in front of them. \par
+To distribute processes to different machines, I would write a script that
+activates the Erlang shell with the right parameters. This allows your local
+computer to spawn processes on the remote computer with an Erlang program, which
+is run after activating the Erlang shell on the remote machine.
 \end{document}
