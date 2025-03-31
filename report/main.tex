@@ -203,7 +203,7 @@ For this experiment we use the parameters mentioned in
 the maximum amount of threads, so in Omen's case its 12 and for Firefly its 128.
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.8\textwidth]{boxplots/boxplot-throughput-in-operations-per-second-for-12-threads.pdf}
+	\includegraphics[width=0.8\textwidth]{boxplots/omen/boxplot-throughput-in-operations-per-second-for-12-threads.pdf}
 	\caption{Comparing throughput of implementations on Omen}
 	\label{fig:throughput-compare-impl-omen}
 \end{figure}
@@ -220,6 +220,7 @@ with the sharded implementation.
 % On firefly
 
 \subsection{Throughput per second depending on scheduler threads}
+\label{sec:throughput-per-second-depending-on-scheduler-threads}
 For this experiment we use the same parameters mentioned in
 \autoref{sec:experimental-set-up} but set the scenario to read-write, as it
 provides the results of a balanced mix of operations and requires more
@@ -227,6 +228,29 @@ operations to complete. We will also only look at the worker implementation as
 it seems to have the most potential for the highest throughput. In this experiment we measure the throughput of
 operations depending on the amount of scheduler threads. For Omen, we will look
 at 1-12 threads and for firefly 1-128.
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{violinplots/omen/throughput-per-second-of-scenario-read-write-implementation-worker-violinplot.pdf}
+	\caption{Throughput Omen read-write}
+	\label{fig:throughput-omen-read-write-depend-threads}
+\end{figure}
+Looking at the results from Omen, we can see that there is a general trend that
+improves the throughput as we add more threads. However the returns are
+diminishing as the curve is logarithmic. In the last two measurements (11 and 12
+threads) we can see that they are very similar. While having 12 threads makes it
+possible to outperform 11 threads, it is not implied as some results seem to
+overlap or are worse.
+\subsection{Speedup depending on scheduler threads}
+For this experiment we will use the same parameters mentioned in
+\autoref{sec:experimental-set-up} and similar variables as in
+\autoref{sec:throughput-per-second-depending-on-scheduler-threads}. We will only
+be looking at the worker implementation and at the read-write scenario.
+\begin{figure}
+	\centering
+	\includegraphics[width=0.8\textwidth]{boxplots/omen/boxplot-speedup-of-scenario-read-write-implementation-worker.pdf}
+
+
+\end{figure}
 \section{Insight}
 \subsection{Lightweight processes and its impact}
 The lightweight-ness of the processes has definately influenced my solution,

@@ -99,7 +99,11 @@ def title_to_filename(title: str):
 
 
 def plot_boxplots(
-    speedups: dict[str, list[Union[int, float]]], title: str, xlabel: str, ylabel: str
+    speedups: dict[str, list[Union[int, float]]],
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    dir: str = "",
 ):
     """Plot the speedups as boxplots.
     Example:
@@ -124,7 +128,7 @@ def plot_boxplots(
         [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
     )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
-    path = Path("report/images/boxplots/")
+    path = Path(f"report/images/boxplots/{dir}")
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     fig.savefig(f"{path.as_posix()}/boxplot-{title_to_filename(title)}.pdf")
@@ -132,7 +136,11 @@ def plot_boxplots(
 
 
 def plot_violinplots(
-    speedups: dict[str, list[float]], title: str, xlabel: str, ylabel: str
+    speedups: dict[str, list[float]],
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    dir: str = "",
 ):
     """Plot the speedups as violin plots (alternative).
     Example:
@@ -153,7 +161,7 @@ def plot_violinplots(
         [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
     )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
-    path = Path("report/images/violinplots/")
+    path = Path(f"report/images/violinplots/{dir}")
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     fig.savefig(f"{path.as_posix()}/{title_to_filename(title)}-violinplot.pdf")
@@ -161,7 +169,11 @@ def plot_violinplots(
 
 
 def plot_errorbars(
-    speedups: dict[str, list[float]], title: str, xlabel: str, ylabel: str
+    speedups: dict[str, list[float]],
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    dir: str = "",
 ):
     """Plot the speedups as plot with error bars.
     Example:
@@ -187,7 +199,7 @@ def plot_errorbars(
     ax.set_xticks(x)
     ax.set_xticklabels([str(k) if k % 4 == 0 or k == 1 else "" for k in x])
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
-    path = Path("report/images/errorbars/")
+    path = Path(f"report/images/errorbars/{dir}")
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     fig.savefig(f"{path.as_posix()}/{title_to_filename(title)}-errorbars.pdf")
@@ -428,6 +440,7 @@ def make_speedup_plots(origin: pl.LazyFrame = pl.scan_csv(data_file.name)):
     data = origin.filter(pl.col("storage") == "maps").cache()
     lfs = lf_combinations(data)
     speedups = [calc_speedup(lf).sort(pl.col("scheduler_threads")) for lf in lfs]
+    device = origin.select("device").unique().collect().get_column("device")[0]
     for s in speedups:
         tmp = s.select(["implementation", "scenario"]).unique().collect()
         implementation = tmp.get_column("implementation")[0]
@@ -439,9 +452,11 @@ def make_speedup_plots(origin: pl.LazyFrame = pl.scan_csv(data_file.name)):
         title = f"Speedup of scenario: {scenario}, implementation: {implementation}"
         xlabel = "Number of threads"
         ylabel = "Speedup"
-        plot_boxplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
-        plot_violinplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
-        plot_errorbars(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
+        plot_boxplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel, dir=device)
+        plot_violinplots(
+            plot_data, title=title, xlabel=xlabel, ylabel=ylabel, dir=device
+        )
+        plot_errorbars(plot_data, title=title, xlabel=xlabel, ylabel=ylabel, dir=device)
 
 
 def calc_throughput(orig: pl.LazyFrame) -> pl.LazyFrame:
@@ -458,6 +473,7 @@ def make_throughput_plots(
 ):
     orig_lf.cache()
     lfs = [lf.sort(pl.col("scheduler_threads")) for lf in lf_combinations(orig_lf)]
+    device = orig_lf.select("device").unique().collect().get_column("device")[0]
     for lf in lfs:
         tmp = lf.select(["implementation", "scenario"]).unique().collect()
         implementation = tmp.get_column("implementation")[0]
@@ -473,12 +489,15 @@ def make_throughput_plots(
         title = f"Throughput per second of scenario: {scenario}, implementation: {implementation}"
         xlabel = "Number of threads"
         ylabel = "Throughput (ops/s)"
-        plot_boxplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
-        plot_violinplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
-        plot_errorbars(plot_data, title=title, xlabel=xlabel, ylabel=ylabel)
+        plot_boxplots(plot_data, title=title, xlabel=xlabel, ylabel=ylabel, dir=device)
+        plot_violinplots(
+            plot_data, title=title, xlabel=xlabel, ylabel=ylabel, dir=device
+        )
+        plot_errorbars(plot_data, title=title, xlabel=xlabel, ylabel=ylabel, dir=device)
 
 
 def compare_throughput(orig_lf: pl.LazyFrame, scheduler_threads: int):
+    device = orig_lf.select("device").unique().collect().get_column("device")[0]
     orig_lf = (
         orig_lf.filter(pl.col("scheduler_threads") == scheduler_threads)
         .group_by(["implementation", "scenario"])
@@ -511,7 +530,7 @@ def compare_throughput(orig_lf: pl.LazyFrame, scheduler_threads: int):
     ax.set_xticks(range(0, len(plot_data.keys()) + 1))
     ax.set_xticklabels([""] + list(plot_data.keys()), rotation=80)
     ax.set_ylim(0, 1.1 * max([max(v) for v in plot_data.values()]))
-    path = Path("report/images/boxplots/")
+    path = Path(f"report/images/boxplots/{device}")
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     plt.subplots_adjust(bottom=0.4)
@@ -524,7 +543,10 @@ def main():
         (pl.col("storage") == "maps") & (pl.col("scheduler_threads") <= 12)
     )
     thr = calc_throughput(lf)
+    spu = calc_speedup(lf)
     compare_throughput(thr, 12)
+    make_throughput_plots(thr)
+    make_speedup_plots(spu)
 
 
 if __name__ == "__main__":
