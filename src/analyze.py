@@ -9,6 +9,7 @@ from typing import Dict, Generator, List, Set, Tuple, Union
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from polars import LazyFrame, lazyframe
 
 omen_dict_dir = Path("./benchmarks-omen-dict/")
 omen_maps_dir = Path("./benchmarks-omen-maps/")
@@ -410,14 +411,30 @@ def compare_storage(lf_origin: pl.LazyFrame):
 
 
 def calc_speedup(orig: pl.LazyFrame):
-    base = (
-        orig.filter(pl.col("scheduler_threads").eq(1))
-        .select("elapsed_time(ms)")
-        .median()
-        .collect()
-        .get_column("elapsed_time(ms)")[0]
+    lfs = [
+        orig.filter(
+            (pl.col("implementation") == implementation)
+            & (pl.col("scenario") == scenario)
+        )
+        for (implementation, scenario) in combinations()
+    ]
+    return pl.concat(
+        [
+            lf.with_columns(
+                (
+                    (
+                        lf.filter(pl.col("scheduler_threads").eq(1))
+                        .select("elapsed_time(ms)")
+                        .median()
+                        .collect()
+                        .get_column("elapsed_time(ms)")[0]
+                    )
+                    / pl.col("elapsed_time(ms)")
+                ).alias("speedup")
+            )
+            for lf in lfs
+        ]
     )
-    return orig.with_columns((base / pl.col("elapsed_time(ms)")).alias("speedup"))
 
 
 def combinations():
@@ -438,10 +455,9 @@ def lf_combinations(lf):
 
 def make_speedup_plots(origin: pl.LazyFrame = pl.scan_csv(data_file.name)):
     data = origin.filter(pl.col("storage") == "maps").cache()
-    lfs = lf_combinations(data)
-    speedups = [calc_speedup(lf).sort(pl.col("scheduler_threads")) for lf in lfs]
+    lfs = [lf.sort(["scheduler_threads"]) for lf in lf_combinations(data)]
     device = origin.select("device").unique().collect().get_column("device")[0]
-    for s in speedups:
+    for s in lfs:
         tmp = s.select(["implementation", "scenario"]).unique().collect()
         implementation = tmp.get_column("implementation")[0]
         scenario = tmp.get_column("scenario")[0]
@@ -518,12 +534,6 @@ def compare_throughput(orig_lf: pl.LazyFrame, scheduler_threads: int):
     mpl.rcParams.update({"font.size": 16})
     fig, ax = plt.subplots(figsize=(10, 8))
     ax.boxplot(list(plot_data.values()), notch=True, bootstrap=1000)
-    # Note: the 'notch' represents the confidence interval, calculated using
-    # bootstrapping, a statistical technique that resamples the data.
-    # Note: matplotlib draws the whiskers at 1.5 * IQR from the 1st and 3rd quartile.
-    # Points outside the whiskers are plotted as outliers (individual circles).
-    # Different styles exist.
-    # See https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.boxplot.html
     ax.set_title(title)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -538,14 +548,101 @@ def compare_throughput(orig_lf: pl.LazyFrame, scheduler_threads: int):
     plt.close()
 
 
+def renew_omen_maps_results():
+    msms, params, server = parse_dirs([omen_maps_dir])
+    lf = pl.scan_csv(data_file.name).filter(pl.col("storage") != "maps")
+    new_lf = measurements_to_lf(msms, params)
+    lf = pl.concat([lf, new_lf.select(lf.collect_schema().names())]).collect().lazy()
+    lf.sink_csv(data_file.name)
+
+
+def compute_speedup_diff(lf: pl.LazyFrame):
+    lf = lf.group_by(
+        "device", "implementation", "scenario", "scheduler_threads", maintain_order=True
+    ).agg(
+        (
+            pl.when(pl.col("scheduler_threads").eq(1))
+            .then(pl.lit(1))
+            .otherwise(pl.col("speedup"))
+        )
+        .median()
+        .alias("median_speedup")
+    )
+    lfs = [
+        lf.filter(
+            (pl.col("implementation") == implementation)
+            & (pl.col("scenario") == scenario)
+        )
+        for (implementation, scenario) in combinations()
+    ]
+    return pl.concat(
+        [
+            lf.with_columns(
+                pl.col("median_speedup").shift(1).alias("prev_median_speedup")
+            )
+            .with_columns(
+                (pl.col("median_speedup") - pl.col("prev_median_speedup")).alias(
+                    "speedup_diff"
+                )
+            )
+            .drop(["median_speedup", "prev_median_speedup"])
+            .with_columns(
+                pl.when(pl.col("speedup_diff").is_null())
+                .then(pl.lit(0))
+                .otherwise(pl.col("speedup_diff"))
+                .alias("speedup_diff")
+            )
+            for lf in lfs
+        ]
+    )
+
+
+def make_speedup_diff_plot(
+    threads: List[int], data: List[float], dev: str, impl: str, scen: str
+):
+    title = f"Speedup difference implementation: {impl}, scenario: {scen}"
+    xlabel = "Scheduler threads"
+    ylabel = "Δ Speedup"
+    mpl.rcParams.update({"font.size": 16})
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(threads, data, "o-", linewidth=2)
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xticks(range(0, len(threads) + 1))
+    ax.set_xticklabels(["0"] + [str(t) for t in threads])
+    ax.axhline(0, color="red", linestyle="--", linewidth=1)
+    ax.set_ylim(1.1 * min(data), 1.1 * max(data))
+    path = Path(f"report/images/plot/{dev}")
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+    fig.savefig(f"{path.as_posix()}/plot-{title_to_filename(title)}.pdf")
+    plt.close()
+
+
+def make_speedup_diff_plots(orig: pl.LazyFrame):
+    lfs = lf_combinations(orig)
+    for lf in lfs:
+        df = lf.collect()
+        diffs = df.get_column("speedup_diff")
+        threads = df.get_column("scheduler_threads")
+        implementation = df.get_column("implementation")[0]
+        scenario = df.get_column("scenario")[0]
+        device = df.get_column("device")[0]
+        make_speedup_diff_plot(
+            threads.to_list(), diffs.to_list(), device, implementation, scenario
+        )
+
+
 def main():
     lf = pl.scan_csv(data_file.name).filter(
         (pl.col("storage") == "maps") & (pl.col("scheduler_threads") <= 12)
     )
     thr = calc_throughput(lf)
     spu = calc_speedup(lf)
-    compare_throughput(thr, 12)
-    make_throughput_plots(thr)
+    pl.Config.set_tbl_rows(4000)
+    spd = compute_speedup_diff(spu.sort(["experiment", "scheduler_threads"]))
+    make_speedup_diff_plots(spd)
     make_speedup_plots(spu)
 
 
