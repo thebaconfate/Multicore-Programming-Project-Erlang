@@ -20,7 +20,6 @@ data_file = Path("measurements.csv")
 
 implementations = ["central", "sharded", "worker"]
 scenarios = ["read-only", "read-write", "mixed-load"]
-BENCHMARK_NAME = "ree"
 
 
 # Set log level.
@@ -634,16 +633,12 @@ def make_speedup_diff_plots(orig: pl.LazyFrame):
         )
 
 
+def backup_measurements(filename: str):
+    pl.scan_csv(filename).sink_csv(f"backup_{filename}")
+
+
 def main():
-    lf = pl.scan_csv(data_file.name).filter(
-        (pl.col("storage") == "maps") & (pl.col("scheduler_threads") <= 12)
-    )
-    thr = calc_throughput(lf)
-    spu = calc_speedup(lf)
-    pl.Config.set_tbl_rows(4000)
-    spd = compute_speedup_diff(spu.sort(["experiment", "scheduler_threads"]))
-    make_speedup_diff_plots(spd)
-    make_speedup_plots(spu)
+    backup_measurements(data_file.name)
 
 
 if __name__ == "__main__":

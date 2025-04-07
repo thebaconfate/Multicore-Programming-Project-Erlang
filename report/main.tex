@@ -231,7 +231,7 @@ at 1-12 threads and for firefly 1-128.
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.8\textwidth]{violinplots/omen/throughput-per-second-of-scenario-read-write-implementation-worker-violinplot.pdf}
-	\caption{Throughput Omen read-write}
+	\caption{Throughput Omen, impl: worker, scenario: read-write}
 	\label{fig:throughput-omen-read-write-depend-threads}
 \end{figure}
 Looking at the results from Omen, we can see that there is a general trend that
@@ -245,12 +245,27 @@ For this experiment we will use the same parameters mentioned in
 \autoref{sec:experimental-set-up} and similar variables as in
 \autoref{sec:throughput-per-second-depending-on-scheduler-threads}. We will only
 be looking at the worker implementation and at the read-write scenario.
-\begin{figure}
+Furthermore, we will use the median of the results of the single threaded
+experiment as the basis to compute the speedup for multiple threads.
+\begin{figure}[H]
 	\centering
 	\includegraphics[width=0.8\textwidth]{boxplots/omen/boxplot-speedup-of-scenario-read-write-implementation-worker.pdf}
-
-
+	\caption{Speedup on Omen, impl: worker, scenario: read-write}
+	\label{fig:speedup-omen-worker-rw}
 \end{figure}
+Similar to the previous experiment, we can see in \autoref{fig:speedup-omen-worker-rw} that there is an improving trend, however once
+12 threads are used the results seem to have the potential to be better than 11
+threads but are not always better.
+Comparing the difference in medians between threads: $$\Delta Speedup(T) =
+	Median(Speedup(T)) - Median(Speedup(T - 1))\:with\:T=\#Threads$$
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{plot/omen/plot-speedup-difference-implementation-worker-scenario-read-write.pdf}
+	\caption{$\Delta Speedup$ Omen read-write}
+	\label{fig:delta-speedup-omen-rw}
+\end{figure}
+in \autoref{fig:delta-speedup-omen-rw} we can clearly see the downwards trend of
+improvements when adding an extra thread.
 \section{Insight}
 \subsection{Lightweight processes and its impact}
 The lightweight-ness of the processes has definately influenced my solution,
