@@ -232,7 +232,7 @@ Firefly's single threaded speed is inferior to that of Omens'. \par
 Firefly's throughput on the worker implementation is roughly double that of
 Omens', which is logical since the worker implementation doesn't have the single
 bottleneck that the sharded and central implementations have.
-\subsection{Throughput per second depending on scheduler threads}
+\subsubsection{Throughput per second depending on scheduler threads}
 \label{sec:throughput-per-second-depending-on-scheduler-threads}
 For this experiment we use the same parameters mentioned in
 \autoref{sec:experimental-set-up} but set the scenario to read-write, as it
@@ -264,7 +264,7 @@ the logarithmic curve, however here we can see that starting from a certain
 amount of scheduler threads ($\approx 40$) it becomes harder to gain more
 throughput as this is likely to indicate that the system is bottlenecked by it's
 sequential part and cannot gain more speed from adding more scheduler threads.
-\subsection{Speedup depending on scheduler threads}
+\subsubsection{Speedup depending on scheduler threads}
 For this experiment we will use the same parameters mentioned in
 \autoref{sec:experimental-set-up} and similar variables as in
 \autoref{sec:throughput-per-second-depending-on-scheduler-threads}. We will only
