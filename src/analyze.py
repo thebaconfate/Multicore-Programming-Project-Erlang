@@ -641,19 +641,10 @@ def backup_measurements(filename: str):
 
 
 def main():
-    msms, params, server = parse_dirs([firefly2_dir])
-    current_lf = pl.scan_csv(f"src/backup_{data_file.name}")
-    new_lf = measurements_to_lf(msms, params)
-    new_lf = new_lf.with_columns(
-        (
-            pl.when(pl.col("storage") == "session")
-            .then(pl.lit("maps"))
-            .otherwise(pl.col("storage"))
-        ).alias("storage")
-    ).select(current_lf.collect_schema().names())
-    merged_lf = pl.concat([current_lf, new_lf])
-    merged_lf.sink_csv(f"src/{data_file.name}")
-    print(merged_lf.collect())
+    lf = pl.scan_csv(f"src/{data_file.name}").filter(
+        (pl.col("device") == "firefly") & (pl.col("storage") == "maps")
+    )
+    print(lf.collect())
 
 
 if __name__ == "__main__":
