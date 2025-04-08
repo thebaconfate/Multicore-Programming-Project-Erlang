@@ -258,8 +258,12 @@ overlap or are worse.
 	\includegraphics[width=0.8\textwidth]{violinplots/firefly/throughput-per-second-of-scenario-read-write-implementation-worker-violinplot.pdf}
 	\caption{Throughput Firefly, impl: worker, scenario: read-write}
 	\label{fig:throughput-firefly-read-write-depend-threads}
-
 \end{figure}
+In \autoref{fig:throughput-firefly-read-write-depend-threads} we can also see
+the logarithmic curve, however here we can see that starting from a certain
+amount of scheduler threads ($\approx 40$) it becomes harder to gain more
+throughput as this is likely to indicate that the system is bottlenecked by it's
+sequential part and cannot gain more speed from adding more scheduler threads.
 \subsection{Speedup depending on scheduler threads}
 For this experiment we will use the same parameters mentioned in
 \autoref{sec:experimental-set-up} and similar variables as in
