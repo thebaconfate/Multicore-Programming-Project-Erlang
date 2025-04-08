@@ -14,6 +14,7 @@ from polars import LazyFrame, lazyframe
 omen_dict_dir = Path("./benchmarks-omen-dict/")
 omen_maps_dir = Path("./benchmarks-omen-maps/")
 firefly1_dir = Path("./benchmarks-firefly1/")
+firefly2_dir = Path("./benchmarks-firefly-session-2")
 
 data_file = Path("measurements.csv")
 
@@ -267,6 +268,8 @@ def parse_dirs(dirs: list[Path]) -> Tuple[Measurements, Params, Server]:
     server = {}
     params = {}
     for dir in dirs:
+        if not dir.exists():
+            dir = Path(f"src/{dir.name}")
         measurements[dir.name], params[dir.name], server[dir.name] = parse_files(
             dir.iterdir(), dir
         )
@@ -638,7 +641,19 @@ def backup_measurements(filename: str):
 
 
 def main():
-    backup_measurements(data_file.name)
+    msms, params, server = parse_dirs([firefly2_dir])
+    current_lf = pl.scan_csv(f"src/backup_{data_file.name}")
+    new_lf = measurements_to_lf(msms, params)
+    new_lf = new_lf.with_columns(
+        (
+            pl.when(pl.col("storage") == "session")
+            .then(pl.lit("maps"))
+            .otherwise(pl.col("storage"))
+        ).alias("storage")
+    ).select(current_lf.collect_schema().names())
+    merged_lf = pl.concat([current_lf, new_lf])
+    merged_lf.sink_csv(f"src/{data_file.name}")
+    print(merged_lf.collect())
 
 
 if __name__ == "__main__":
