@@ -3,13 +3,11 @@ from pathlib import Path
 import os
 import logging
 import re
-from numpy.typing import NDArray
 import polars as pl
 from typing import Dict, Generator, List, Set, Tuple, Union
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from polars import LazyFrame, lazyframe
 
 omen_dict_dir = Path("./benchmarks-omen-dict/")
 omen_maps_dir = Path("./benchmarks-omen-maps/")
@@ -100,7 +98,7 @@ def title_to_filename(title: str):
 
 
 def plot_boxplots(
-    speedups: dict[str, list[Union[int, float]]],
+    speedups: dict[int, list[Union[int, float]]],
     title: str,
     xlabel: str,
     ylabel: str,
@@ -126,7 +124,7 @@ def plot_boxplots(
     ax.set_ylabel(ylabel)
     ax.set_xticks(list(speedups.keys()))
     ax.set_xticklabels(
-        [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
+        [str(k) if k % 8 == 0 or k == 1 else "" for k in speedups.keys()]
     )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
     path = Path(f"report/images/boxplots/{dir}")
@@ -159,7 +157,7 @@ def plot_violinplots(
     ax.set_ylabel(ylabel)
     ax.set_xticks(list(speedups.keys()))
     ax.set_xticklabels(
-        [str(k) if k % 4 == 0 or k == 1 else "" for k in speedups.keys()]
+        [str(k) if k % 16 == 0 or k == 1 else "" for k in speedups.keys()]
     )
     ax.set_ylim(0, 1.1 * max([max(speedups[i]) for i in speedups]))
     path = Path(f"report/images/violinplots/{dir}")
@@ -551,7 +549,7 @@ def compare_throughput(orig_lf: pl.LazyFrame, scheduler_threads: int):
 
 
 def renew_omen_maps_results():
-    msms, params, server = parse_dirs([omen_maps_dir])
+    msms, params, _ = parse_dirs([omen_maps_dir])
     lf = pl.scan_csv(data_file.name).filter(pl.col("storage") != "maps")
     new_lf = measurements_to_lf(msms, params)
     lf = pl.concat([lf, new_lf.select(lf.collect_schema().names())]).collect().lazy()
@@ -612,7 +610,7 @@ def make_speedup_diff_plot(
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xticks(range(0, len(threads) + 1))
-    ax.set_xticklabels(["0"] + [str(t) for t in threads])
+    ax.set_xticklabels(["0"] + [str(t) if t % 8 == 0 else "" for t in threads])
     ax.axhline(0, color="red", linestyle="--", linewidth=1)
     ax.set_ylim(1.1 * min(data), 1.1 * max(data))
     path = Path(f"report/images/plot/{dev}")
@@ -644,7 +642,13 @@ def main():
     lf = pl.scan_csv(f"src/{data_file.name}").filter(
         (pl.col("device") == "firefly") & (pl.col("storage") == "maps")
     )
-    print(lf.collect())
+    spdu = calc_speedup(lf)
+    thru = calc_throughput(lf)
+    spddiff = compute_speedup_diff(spdu.sort(["scheduler_threads"]))
+    make_speedup_plots(spdu)
+    make_throughput_plots(thru)
+    # compare_throughput(thru, 128)
+    make_speedup_diff_plots(spddiff.sort(["scheduler_threads"]))
 
 
 if __name__ == "__main__":

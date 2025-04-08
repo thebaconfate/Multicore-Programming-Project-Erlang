@@ -218,7 +218,20 @@ implementation. In the case of read only operations the throughput even overlaps
 with the sharded implementation.
 
 % On firefly
-
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{boxplots/firefly/boxplot-throughput-in-operations-per-second-for-128-threads.pdf}
+	\caption{Comparing throughput of implementations on Firefly}
+	\label{fig:throughput-compare-impl-firefly}
+\end{figure}
+On Firefly we can also clearly see an improving trend, however instead of having
+the biggest jump in throughput from central to sharded, it is from sharded to
+worker. This is due to the fact that the sharded implementation still has a
+bottleneck: The server. This is where all the messages need to pass through and
+Firefly's single threaded speed is inferior to that of Omens'. \par
+Firefly's throughput on the worker implementation is roughly double that of
+Omens', which is logical since the worker implementation doesn't have the single
+bottleneck that the sharded and central implementations have.
 \subsection{Throughput per second depending on scheduler threads}
 \label{sec:throughput-per-second-depending-on-scheduler-threads}
 For this experiment we use the same parameters mentioned in
@@ -236,10 +249,17 @@ at 1-12 threads and for firefly 1-128.
 \end{figure}
 Looking at the results from Omen, we can see that there is a general trend that
 improves the throughput as we add more threads. However the returns are
-diminishing as the curve is logarithmic. In the last two measurements (11 and 12
+diminishing as the curve is logarithmic (and follows Amdahl's law). In the last two measurements (11 and 12
 threads) we can see that they are very similar. While having 12 threads makes it
 possible to outperform 11 threads, it is not implied as some results seem to
 overlap or are worse.
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{violinplots/firefly/throughput-per-second-of-scenario-read-write-implementation-worker-violinplot.pdf}
+	\caption{Throughput Firefly, impl: worker, scenario: read-write}
+	\label{fig:throughput-firefly-read-write-depend-threads}
+
+\end{figure}
 \subsection{Speedup depending on scheduler threads}
 For this experiment we will use the same parameters mentioned in
 \autoref{sec:experimental-set-up} and similar variables as in
@@ -265,7 +285,23 @@ Comparing the difference in medians between threads: $$\Delta Speedup(T) =
 	\label{fig:delta-speedup-omen-rw}
 \end{figure}
 in \autoref{fig:delta-speedup-omen-rw} we can clearly see the downwards trend of
-improvements when adding an extra thread.
+improvements when adding an extra thread. \par
+Reading the results from Firefly in \autoref{fig:speedup-firefly-worker-rw}, we can see a similar improving trend, however at around 40 scheduler threads it maxes out and then the speedup decreases and becomes very volatile.
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{boxplots/firefly/boxplot-speedup-of-scenario-read-write-implementation-worker.pdf}
+	\caption{Speedup on Firefly, impl: worker, scenario: read-write}
+	\label{fig:speedup-firefly-worker-rw}
+\end{figure}
+A better visualisation of the evolution of the speedup can be seen in
+\autoref{fig:delta-speedup-firefly-rw}. Here we clearly see the speedup increase
+in decremental amounts till it decrements and then becomes very volatile.
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{plot/firefly/plot-speedup-difference-implementation-worker-scenario-read-write.pdf}
+	\caption{$\Delta Speedup$ Firefly read-write}
+	\label{fig:delta-speedup-firefly-rw}
+\end{figure}
 \section{Insight}
 \subsection{Lightweight processes and its impact}
 The lightweight-ness of the processes has definately influenced my solution,
@@ -280,7 +316,7 @@ optimal amount of processes to have to reach the optimal performance and base my
 implementation on that instead of going nuts with the amount of processes.
 \subsection{Distribution of cores over multiple machines}
 If the application would be distributed over multiple machines, the achitecture
-or the worker implementation would still be viable, but on a larger scale. This
+of the worker implementation would still be viable, but on a larger scale. This
 means that perhaps it would be better to give each process or each X amount of
 processes a machine. Since my implementation now primarily focusses on
 processing the most amount of requests in the least amount of time, I would
